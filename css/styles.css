@@ -1,93 +1,15 @@
-/* Common styles */
+/* Custom styles and animations not covered by Bootstrap */
 body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
     height: 100vh;
-    overflow: hidden;
-}
-
-.navbar {
-    background-color: #f8f9fa;
-    display: flex;
-    flex-direction: row;
-    padding: 15px;
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 60px;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    z-index: 1000;
-}
-
-.nav-left {
-    display: flex;
-    flex-direction: row;
-    gap: 20px;
-}
-
-.nav-left a {
-    color: white;
-    text-decoration: none;
-    margin-right: 15px;
-    padding: 10px;
-}
-
-.nav-left a:hover {
-    background-color: #ddd;
-    color: black;
-}
-
-.nav-left a img, .nav-right img {
-    background-color: white;
-    border-radius: 50%;
-}
-
-.nav-right {
-    margin-left: auto;
-    display: flex;
-    flex-direction: row;
-    gap: 10px;
-}
-
-.nav-right button {
-    background: none;
-    border: none;
-    cursor: pointer;
-    margin-right: 10px;
-}
-
-.nav-right img {
-    width: 20px;
-    height: 20px;
-}
-
-.content {
-    margin-left: 0;
-    margin-top: 60px;
-    height: calc(100vh - 60px);
     overflow: hidden;
 }
 
 .dashboard-section {
     display: none;
     height: 100%;
-    padding: 10px;
-    background-color: #f9f9f9;
-    border-radius: 8px;
-    margin: 0;
     opacity: 0;
     transform: translateY(20px);
     transition: opacity 0.3s ease, transform 0.3s ease;
-}
-
-.dashboard-section h2 {
-    font-size: 20px;
-    color: #333;
-    margin: 0 0 10px 0;
-    padding-bottom: 5px;
-    border-bottom: 2px solid #ddd;
 }
 
 .dashboard-section.active {
@@ -96,51 +18,7 @@ body {
     transform: translateY(0);
 }
 
-.dashboard-content {
-    min-height: 400px;
-}
-
-.active {
-    display: block;
-}
-
-/* Common table styles */
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-}
-
-th, td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-}
-
-th {
-    background-color: #f2f2f2;
-}
-
-/* Common form styles */
-.form-group {
-    margin-bottom: 15px;
-}
-
-button {
-    background-color: #4CAF50;
-    color: white;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 3px;
-    cursor: pointer;
-    transition: background-color 0.2s ease-in-out;
-}
-
-button:hover {
-    background-color: #45a049;
-}
-
-/* Common notification styles */
+/* Notifications */
 .notification {
     position: fixed;
     top: 20px;
@@ -172,78 +50,7 @@ button:hover {
     background-color: #2196F3;
 }
 
-/* Import overlay styles */
-.import-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: #f8f9fa;
-    z-index: 2000;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.import-container {
-    background: white;
-    padding: 40px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    text-align: center;
-    max-width: 600px;
-    width: 90%;
-}
-
-.import-container h2 {
-    color: #333;
-    margin-bottom: 20px;
-}
-
-.import-options {
-    display: flex;
-    gap: 30px;
-    margin-top: 30px;
-    justify-content: center;
-}
-
-.import-option {
-    flex: 1;
-    padding: 20px;
-    border: 2px solid #e9ecef;
-    border-radius: 8px;
-    transition: border-color 0.3s ease;
-}
-
-.import-option:hover {
-    border-color: #4CAF50;
-}
-
-.import-option h3 {
-    color: #4CAF50;
-    font-size: 1.2em;
-    margin-bottom: 15px;
-}
-
-.import-button {
-    display: inline-block;
-    background-color: #4CAF50;
-    color: white;
-    padding: 12px 24px;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 15px;
-    border: none;
-    font-size: 1em;
-    transition: background-color 0.3s ease;
-}
-
-.import-button:hover {
-    background-color: #45a049;
-}
-
-/* Common animations */
+/* Loading animation */
 .loading {
     position: relative;
     min-height: 200px;
@@ -268,7 +75,7 @@ button:hover {
     100% { transform: rotate(360deg); }
 }
 
-/* Common accessibility styles */
+/* Focus outline for accessibility */
 button:focus-visible,
 input:focus-visible,
 [role="gridcell"]:focus-visible,
@@ -276,19 +83,4 @@ input:focus-visible,
     outline: 2px solid #4CAF50;
     outline-offset: 2px;
     box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
-}
-
-.skip-nav {
-    position: absolute;
-    top: -40px;
-    left: 0;
-    background: #4CAF50;
-    color: white;
-    padding: 8px;
-    z-index: 100;
-    transition: top 0.2s;
-}
-
-.skip-nav:focus {
-    top: 0;
 }

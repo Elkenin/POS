@@ -4,11 +4,43 @@ import * as Sales from './sales.js';
 
 // Main script initialization
 document.addEventListener('DOMContentLoaded', async () => {
-    // First check if we should show the initial import overlay
-    if (!localStorage.getItem('systemInitialized')) {
-        setupInitialImport();
-    } else {
-        showMainDashboard();
+    try {
+        // First check if we should show the initial import overlay
+        if (!localStorage.getItem('systemInitialized')) {
+            setupInitialImport();
+        } else {
+            // Initialize sales data
+            await Sales.initializeSalesData();
+            showMainDashboard();
+            
+            // Load initial home section
+            const dashboardContent = document.getElementById('dashboard-content');
+            if (dashboardContent) {
+                await showSection('home');
+                Home.renderCalendar();
+                Home.initializeCalendarKeyboardNavigation();
+            }
+        }
+
+        // Initialize file handling for import/export
+        initializeFileHandling();
+        
+        // Make necessary functions available globally
+        window.addProduct = Inventory.addProduct;
+        window.removeItem = Inventory.removeItem;
+        window.searchInventory = Inventory.searchInventory;
+        window.openEditProductPopup = Inventory.openEditProductPopup;
+        window.addToCart = Sales.addToCart;
+        window.removeFromCart = Sales.removeFromCart;
+        window.finalizeSale = Sales.finalizeSale;
+        window.printReceipt = Sales.printReceipt;
+        window.navigateCalendar = Home.navigateCalendar;
+        window.handleRefund = Home.handleRefund;
+        window.updateSalesView = Home.updateSalesView;
+        
+    } catch (error) {
+        console.error('Initialization error:', error);
+        showNotification('Failed to initialize application', 'error');
     }
 });
 
@@ -18,14 +50,13 @@ function setupInitialImport() {
     
     if (initialExcelFile) {
         initialExcelFile.addEventListener('change', async (event) => {
-            event.preventDefault();
             const file = event.target.files[0];
             if (file) {
                 try {
                     await importInitialData(file);
                     localStorage.setItem('systemInitialized', 'true');
                     hideImportOverlay();
-                    await showMainDashboard();
+                    showMainDashboard();
                     showNotification('Data imported successfully!', 'success');
                 } catch (error) {
                     console.error('Import error:', error);
@@ -36,13 +67,13 @@ function setupInitialImport() {
     }
 
     if (startFreshButton) {
-        startFreshButton.addEventListener('click', async () => {
+        startFreshButton.addEventListener('click', () => {
             localStorage.clear();
             localStorage.setItem('systemInitialized', 'true');
             localStorage.setItem('salesData', '[]');
             localStorage.setItem('inventoryData', '[]');
             hideImportOverlay();
-            await showMainDashboard();
+            showMainDashboard();
             showNotification('System initialized with empty data', 'success');
         });
     }
@@ -84,23 +115,35 @@ function showMainDashboard() {
 
 async function importInitialData(file) {
     return new Promise((resolve, reject) => {
+        // Show loading notification
+        showNotification('Processing initial setup file...', 'info');
+        console.log('Starting initial import of file:', file.name);
+
         const reader = new FileReader();
         reader.onload = function(e) {
             try {
                 const data = new Uint8Array(e.target.result);
+                console.log('File loaded, processing workbook...');
                 const workbook = XLSX.read(data, {type: 'array'});
+                console.log('Available sheets:', workbook.SheetNames);
                 
                 // Clear existing data
                 localStorage.clear();
                 
+                let importSummary = {
+                    sales: 0,
+                    inventory: 0
+                };
+
                 // Import sales data if available
                 if (workbook.SheetNames.includes('Sales')) {
                     const salesSheet = workbook.Sheets['Sales'];
                     const salesData = XLSX.utils.sheet_to_json(salesSheet);
+                    console.log(`Found ${salesData.length} sales records`);
                     
-                    const formattedSalesData = salesData.map(sale => ({
-                        date: new Date(sale.Date),
-                        items: sale.Items.split(', ').map(item => {
+                    const formattedSalesData = salesData.map(sale => {
+                        console.log('Processing sale:', sale);
+                        const saleItems = sale.Items.split(', ').map(item => {
                             const match = item.match(/(.*) \((\d+)\)/);
                             return {
                                 name: match[1],
@@ -108,34 +151,69 @@ async function importInitialData(file) {
                                 price: sale.Total / parseInt(match[2]),
                                 total: sale.Total
                             };
-                        }),
-                        total: sale.Total,
-                        refunded: sale.Status === 'Refunded',
-                        refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
-                    }));
+                        });
+                        
+                        return {
+                            date: new Date(sale.Date),
+                            items: saleItems,
+                            total: sale.Total,
+                            refunded: sale.Status === 'Refunded',
+                            refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
+                        };
+                    });
+                    
+                    importSummary.sales = formattedSalesData.length;
+                    console.log('Formatted sales data:', formattedSalesData);
                     
                     localStorage.setItem('salesData', JSON.stringify(formattedSalesData.map(sale => ({
                         ...sale,
                         date: sale.date.toISOString(),
                         refundDate: sale.refundDate ? sale.refundDate.toISOString() : null
                     }))));
+                    showNotification(`Imported ${formattedSalesData.length} sales records`, 'success');
+                } else {
+                    console.log('No Sales sheet found in workbook');
+                    localStorage.setItem('salesData', '[]');
+                    showNotification('No sales data found in file', 'info');
                 }
                 
                 // Import inventory data if available
                 if (workbook.SheetNames.includes('Inventory')) {
                     const inventorySheet = workbook.Sheets['Inventory'];
                     const inventoryData = XLSX.utils.sheet_to_json(inventorySheet);
+                    console.log(`Found ${inventoryData.length} inventory items`);
+                    importSummary.inventory = inventoryData.length;
+                    
                     localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
+                    showNotification(`Imported ${inventoryData.length} inventory items`, 'success');
+                } else {
+                    console.log('No Inventory sheet found in workbook');
+                    localStorage.setItem('inventoryData', '[]');
+                    showNotification('No inventory data found in file', 'info');
                 }
                 
-                showNotification('Data imported successfully!', 'success');
+                // Final success notification with summary
+                setTimeout(() => {
+                    showNotification(
+                        `Setup complete: ${importSummary.sales} sales, ${importSummary.inventory} inventory items`, 
+                        'success'
+                    );
+                }, 2000);
+                
                 resolve();
             } catch (error) {
+                console.error('Import processing error:', error);
+                showNotification('Failed to process import: ' + error.message, 'error');
                 reject(error);
             }
         };
         
-        reader.onerror = () => reject(new Error('Failed to read the file'));
+        reader.onerror = (error) => {
+            console.error('File reading error:', error);
+            showNotification('Failed to read the file', 'error');
+            reject(new Error('Failed to read the file'));
+        };
+        
         reader.readAsArrayBuffer(file);
     });
 }
@@ -376,83 +454,125 @@ function exportToExcel() {
     }
 }
 
-function importFromExcel() {
-    const file = document.getElementById('excelFile').files[0];
+async function importFromExcel() {
+    const fileInput = document.getElementById('excelFile');
+    const file = fileInput.files[0];
+    
     if (!file) {
-        showNotification('Please select a file to import', 'info');
+        showNotification('Please select a file to import', 'error');
         return;
     }
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        try {
-            const data = new Uint8Array(e.target.result);
-            const workbook = XLSX.read(data, {type: 'array'});
-            
-            // Clear existing data
-            localStorage.clear();
-            
-            // Import sales data if available
-            if (workbook.SheetNames.includes('Sales')) {
-                const salesSheet = workbook.Sheets['Sales'];
-                const salesData = XLSX.utils.sheet_to_json(salesSheet);
+    // Show loading notification
+    showNotification('Processing file...', 'info');
+    console.log('Starting import of file:', file.name);
+
+    try {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                console.log('File loaded, processing workbook...');
+                const workbook = XLSX.read(data, {type: 'array'});
+                console.log('Available sheets:', workbook.SheetNames);
                 
-                // Convert date strings to proper UTC Date objects and handle refund information
-                const formattedSalesData = salesData.map(sale => ({
-                    date: new Date(sale.Date),
-                    items: sale.Items.split(', ').map(item => {
-                        const match = item.match(/(.*) \((\d+)\)/);
+                let importSummary = {
+                    sales: 0,
+                    inventory: 0
+                };
+
+                // Import sales data if available
+                if (workbook.SheetNames.includes('Sales')) {
+                    const salesSheet = workbook.Sheets['Sales'];
+                    const salesData = XLSX.utils.sheet_to_json(salesSheet);
+                    console.log(`Found ${salesData.length} sales records`);
+                    
+                    const formattedSalesData = salesData.map(sale => {
+                        console.log('Processing sale:', sale);
+                        const saleItems = sale.Items.split(', ').map(item => {
+                            const match = item.match(/(.*) \((\d+)\)/);
+                            return {
+                                name: match[1],
+                                quantity: parseInt(match[2]),
+                                price: sale.Total / parseInt(match[2]),
+                                total: sale.Total
+                            };
+                        });
+                        
                         return {
-                            name: match[1],
-                            quantity: parseInt(match[2]),
-                            price: sale.Total / parseInt(match[2]), // Approximate price
-                            total: sale.Total
+                            date: new Date(sale.Date),
+                            items: saleItems,
+                            total: sale.Total,
+                            refunded: sale.Status === 'Refunded',
+                            refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
                         };
-                    }),
-                    total: sale.Total,
-                    refunded: sale.Status === 'Refunded',
-                    refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
-                }));
+                    });
+                    
+                    importSummary.sales = formattedSalesData.length;
+                    console.log('Formatted sales data:', formattedSalesData);
+                    
+                    localStorage.setItem('salesData', JSON.stringify(formattedSalesData.map(sale => ({
+                        ...sale,
+                        date: sale.date.toISOString(),
+                        refundDate: sale.refundDate ? sale.refundDate.toISOString() : null
+                    }))));
+                    showNotification(`Imported ${formattedSalesData.length} sales records`, 'success');
+                } else {
+                    console.log('No Sales sheet found in workbook');
+                    showNotification('No sales data found in file', 'info');
+                }
                 
-                // Save to localStorage with refund information
-                localStorage.setItem('salesData', JSON.stringify(formattedSalesData.map(sale => ({
-                    ...sale,
-                    date: sale.date.toISOString(),
-                    refundDate: sale.refundDate ? sale.refundDate.toISOString() : null
-                }))));
+                // Import inventory data if available
+                if (workbook.SheetNames.includes('Inventory')) {
+                    const inventorySheet = workbook.Sheets['Inventory'];
+                    const inventoryData = XLSX.utils.sheet_to_json(inventorySheet);
+                    console.log(`Found ${inventoryData.length} inventory items`);
+                    importSummary.inventory = inventoryData.length;
+                    
+                    localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
+                    showNotification(`Imported ${inventoryData.length} inventory items`, 'success');
+                } else {
+                    console.log('No Inventory sheet found in workbook');
+                    showNotification('No inventory data found in file', 'info');
+                }
+                
+                // Final success notification with summary
+                setTimeout(() => {
+                    showNotification(
+                        `Import complete: ${importSummary.sales} sales, ${importSummary.inventory} inventory items`, 
+                        'success'
+                    );
+                }, 2000);
+
+                // Refresh displays
+                Sales.initializeSalesData();
+                if (document.getElementById('salesCalendar')) {
+                    Home.renderCalendar();
+                }
+                if (document.getElementById('inventoryTable')) {
+                    Inventory.renderInventoryTable();
+                }
+                if (document.getElementById('salesInventoryTable')) {
+                    Sales.renderSalesInventory();
+                }
+                
+                fileInput.value = ''; // Reset the input
+            } catch (error) {
+                console.error('Import processing error:', error);
+                showNotification('Failed to process import: ' + error.message, 'error');
             }
-            
-            // Import inventory data if available
-            if (workbook.SheetNames.includes('Inventory')) {
-                const inventorySheet = workbook.Sheets['Inventory'];
-                const inventoryData = XLSX.utils.sheet_to_json(inventorySheet);
-                localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
-            }
-            
-            // Refresh all displays
-            Sales.initializeSalesData();
-            if (document.getElementById('salesCalendar')) {
-                Home.renderCalendar();
-            }
-            if (document.getElementById('inventoryTable')) {
-                Inventory.renderInventoryTable();
-            }
-            if (document.getElementById('salesInventoryTable')) {
-                Sales.renderSalesInventory();
-            }
-            
-            showNotification('Data imported successfully!', 'success');
-        } catch (error) {
-            console.error('Import error:', error);
-            showNotification('Failed to import data: ' + error.message, 'error');
-        }
-    };
-    
-    reader.onerror = function() {
-        showNotification('Failed to read the file', 'error');
-    };
-    
-    reader.readAsArrayBuffer(file);
+        };
+        
+        reader.onerror = (error) => {
+            console.error('File reading error:', error);
+            showNotification('Failed to read the file', 'error');
+        };
+        
+        await reader.readAsArrayBuffer(file);
+    } catch (error) {
+        console.error('File handling error:', error);
+        showNotification('Error handling file', 'error');
+    }
 }
 
 // Initialize export/import functionality
@@ -465,13 +585,7 @@ function initializeFileHandling() {
     }
     
     if (excelFileInput) {
-        excelFileInput.addEventListener('change', () => {
-            // Clear existing data before import
-            localStorage.clear();
-            importFromExcel();
-            // Reset the input to allow importing the same file again
-            excelFileInput.value = '';
-        });
+        excelFileInput.addEventListener('change', importFromExcel);
     }
 }
 
