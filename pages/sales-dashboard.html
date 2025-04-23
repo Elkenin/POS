@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+<div id="sale" class="dashboard-section">
+    <h2>Sales Dashboard</h2>
+    <div class="sales-container">
+        <div class="inventory-list">
+            <h3>Available Items</h3>
+            <table id="salesInventoryTable" role="grid" aria-label="Available Items">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Price</th>
+                        <th>Available</th>
+                        <th>Qty</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+        <div class="cart">
+            <h3>Shopping Cart</h3>
+            <table id="cartTable" role="grid" aria-label="Shopping Cart">
+                <thead>
+                    <tr>
+                        <th>Item</th>
+                        <th>Price</th>
+                        <th>Qty</th>
+                        <th>Total</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+            <div>
+                <h4>Total: $<span id="cartTotal" aria-live="polite">0.00</span></h4>
+                <button onclick="finalizeSale()" accesskey="f" title="Finalize Sale (Alt+F)" aria-label="Finalize Sale">Finalize Sale</button>
+            </div>
+            <div id="receipt" style="display: none;" aria-live="polite">
+                <h3>Receipt</h3>
+                <div id="receiptContent"></div>
+                <button onclick="printReceipt()" accesskey="p" title="Print Receipt (Alt+P)" aria-label="Print Receipt">Print Receipt</button>
+            </div>
+        </div>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+<div id="inventory" class="dashboard-section">
+    <h2>Inventory Dashboard</h2>
+    <div class="inventory-container" style="display: flex;">
+        <div class="add-product-column" style="flex: 0.8; padding-right: 20px; border-right: 1px solid #ddd;">
+            <div class="add-product-form">
+                <h3>Add New Product</h3>
+                <label for="productName">Product Name</label>
+                <input type="text" id="productName" placeholder="Enter product name" class="modern-input" accesskey="n" title="Product Name (Alt+N)" aria-label="Product Name">
+                <label for="productVariant">Variant</label>
+                <input type="text" id="productVariant" placeholder="Enter variant" class="modern-input" accesskey="v" title="Product Variant (Alt+V)" aria-label="Product Variant">
+                <label for="productCostPrice">Cost Price</label>
+                <input type="number" id="productCostPrice" placeholder="Enter cost price" step="0.01" class="modern-input" accesskey="c" title="Cost Price (Alt+C)" aria-label="Cost Price">
+                <label for="productPrice">Price</label>
+                <input type="number" id="productPrice" placeholder="Enter price" step="0.01" class="modern-input" accesskey="p" title="Price (Alt+P)" aria-label="Price">
+                <label for="productQuantity">Quantity</label>
+                <input type="number" id="productQuantity" placeholder="Enter quantity" class="modern-input" accesskey="q" title="Quantity (Alt+Q)" aria-label="Quantity">
+                <div>
+                    <button class="modern-button" onclick="addProduct()" accesskey="a" title="Add Product (Alt+A)" aria-label="Add Product">Add</button>
+                </div>
+            </div>
+        </div>
+        <div class="inventory-table" style="flex: 2;">
+            <div style="margin-bottom: 10px;">
+                <input type="text" id="searchInventory" placeholder="Search inventory..." class="modern-input" onkeyup="searchInventory()" accesskey="f" title="Search Inventory (Alt+F)" aria-label="Search Inventory">
+            </div>
+            <table id="inventoryTable" role="grid" aria-label="Inventory Table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th>Variant</th>
+                        <th>Cost Price</th>
+                        <th>Price</th>
+                        <th>Quantity</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+</body>
+</html>
