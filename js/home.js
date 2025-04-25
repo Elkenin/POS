@@ -5,104 +5,43 @@ import { inventoryData } from './inventory.js';
 let calendarDate = new Date(Date.UTC(2025, 3, 1)); // April 1, 2025 UTC
 let selectedDate = new Date(Date.UTC(2025, 3, 20));  // April 20, 2025 UTC
 
-function reloadSalesData() {
-    // Force reload sales data from localStorage
-    const storedData = localStorage.getItem('salesData');
-    console.log('Raw stored sales data:', storedData);
-    
-    const loadedData = JSON.parse(storedData) || [];
-    console.log('Parsed sales data:', loadedData);
-    
-    // Clear existing sales data
-    salesData.length = 0;
-    
-    // Convert dates and add to salesData
-    loadedData.forEach(sale => {
-        const saleDate = new Date(sale.date);
-        const convertedSale = {
-            ...sale,
-            date: saleDate
-        };
-        console.log('Processing sale:', {
-            originalDate: sale.date,
-            convertedDate: saleDate,
-            dateComponents: {
-                year: saleDate.getUTCFullYear(),
-                month: saleDate.getUTCMonth(),
-                date: saleDate.getUTCDate(),
-                hours: saleDate.getUTCHours()
-            }
-        });
-        salesData.push(convertedSale);
-    });
-    
-    console.log('Final reloaded sales data:', salesData);
-}
-
 // Helper function to normalize a date to UTC midnight
 function normalizeDate(date) {
-    const normalized = new Date(Date.UTC(
+    return new Date(Date.UTC(
         date.getFullYear(),
         date.getMonth(),
         date.getDate()
     ));
-    return normalized;
 }
 
-// Helper function to check if two dates are the same day in UTC
+// Helper functions
 function isDateEqual(date1, date2) {
     if (!date1 || !date2) return false;
-    
     const d1 = new Date(date1);
     const d2 = new Date(date2);
-    
-    console.log('Comparing dates:', {
-        date1: {
-            original: date1,
-            year: d1.getUTCFullYear(),
-            month: d1.getUTCMonth(),
-            day: d1.getUTCDate()
-        },
-        date2: {
-            original: date2,
-            year: d2.getUTCFullYear(),
-            month: d2.getUTCMonth(),
-            day: d2.getUTCDate()
-        }
-    });
-    
     return d1.getUTCFullYear() === d2.getUTCFullYear() &&
            d1.getUTCMonth() === d2.getUTCMonth() &&
            d1.getUTCDate() === d2.getUTCDate();
 }
 
-// Helper function to get the week number
 function getWeekNumber(date) {
     const d = new Date(date);
-    const firstDayOfMonth = new Date(Date.UTC(
-        d.getUTCFullYear(),
-        d.getUTCMonth(),
-        1
-    ));
+    const firstDayOfMonth = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
     return Math.ceil((d.getUTCDate() + firstDayOfMonth.getUTCDay()) / 7);
 }
 
-// Calculate monthly sales total and revenue
 function calculateMonthlyTotals() {
     let total = 0;
     let revenue = 0;
     
     salesData.forEach(sale => {
-        const saleDate = new Date(sale.date);
-        if (saleDate.getUTCMonth() === calendarDate.getUTCMonth() && 
-            saleDate.getUTCFullYear() === calendarDate.getUTCFullYear() &&
+        if (sale.date.getUTCMonth() === calendarDate.getUTCMonth() && 
+            sale.date.getUTCFullYear() === calendarDate.getUTCFullYear() &&
             !sale.refunded) {
             total += sale.total;
-            
-            // Calculate revenue for each item in the sale
             sale.items.forEach(item => {
                 const inventoryItem = inventoryData.find(invItem => 
-                    invItem.name === item.name.split(' (')[0]  // Handle items with variant in name
+                    invItem.name === item.name.split(' (')[0]
                 );
                 if (inventoryItem) {
                     revenue += (item.price - inventoryItem.costPrice) * item.quantity;
@@ -213,16 +152,8 @@ function getSalesForWeek(date) {
 }
 
 function renderDateDetails(date) {
-    console.log('renderDateDetails called with date:', date);
-    
-    // Force reload sales data
-    reloadSalesData();
-    
-    // Get sales for the selected day
-    const dailySales = salesData.filter(sale => {
-        const saleDate = new Date(sale.date);
-        return isDateEqual(saleDate, date);
-    });
+    // Get sales for the selected day - no need to reload data since it's already loaded
+    const dailySales = salesData.filter(sale => isDateEqual(sale.date, date));
 
     // Render daily sales
     const dailySalesList = document.getElementById('dailySalesList');
@@ -230,13 +161,11 @@ function renderDateDetails(date) {
         dailySalesList.innerHTML = '';
         
         if (dailySales && dailySales.length > 0) {
-            // Render individual sales
             dailySales.forEach((sale, index) => {
                 const saleDiv = document.createElement('div');
                 saleDiv.className = `sale-item${sale.refunded ? ' refunded-sale' : ''}`;
                 const localSaleDate = new Date(sale.date);
                 
-                // Build items list with details
                 const itemsList = sale.items.map(item => {
                     return `
                         <div class="item-row">
@@ -267,6 +196,9 @@ function renderDateDetails(date) {
             dailySalesList.innerHTML = '<p class="no-sales">No sales on this day</p>';
         }
     }
+
+    // Update statistics after rendering details
+    updateStatisticsDisplays(date);
 }
 
 // Add handler for refund button clicks

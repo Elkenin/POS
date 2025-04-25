@@ -2,49 +2,58 @@ import * as Home from './home.js';
 import * as Inventory from './inventory.js';
 import * as Sales from './sales.js';
 
+// Check for XLSX initialization
+function checkXLSX() {
+    return new Promise((resolve, reject) => {
+        const maxAttempts = 10;
+        let attempts = 0;
+        
+        function check() {
+            if (window.XLSX_INITIALIZED) {
+                console.log('XLSX is ready');
+                resolve();
+            } else if (attempts >= maxAttempts) {
+                reject(new Error('XLSX initialization timeout'));
+            } else {
+                attempts++;
+                setTimeout(check, 500);
+            }
+        }
+        
+        check();
+    });
+}
+
 // Main script initialization
 document.addEventListener('DOMContentLoaded', async () => {
     try {
-        // First check if we should show the initial import overlay
+        console.log('Application starting...');
+        
+        // Add global notification listener
+        window.addEventListener('show-notification', (event) => {
+            showNotification(event.detail.message, event.detail.type);
+        });
+        
+        // Wait for XLSX to initialize first
+        await checkXLSX();
+        console.log('XLSX initialized');
+        
+        // Check if we need first-time setup
         if (!localStorage.getItem('systemInitialized')) {
+            console.log('First time setup - showing import overlay');
             setupInitialImport();
         } else {
-            // Initialize sales data
-            await Sales.initializeSalesData();
-            showMainDashboard();
-            
-            // Load initial home section
-            const dashboardContent = document.getElementById('dashboard-content');
-            if (dashboardContent) {
-                await showSection('home');
-                Home.renderCalendar();
-                Home.initializeCalendarKeyboardNavigation();
-            }
+            console.log('System already initialized - loading application');
+            await initializeApplication();
         }
-
-        // Initialize file handling for import/export
-        initializeFileHandling();
-        
-        // Make necessary functions available globally
-        window.addProduct = Inventory.addProduct;
-        window.removeItem = Inventory.removeItem;
-        window.searchInventory = Inventory.searchInventory;
-        window.openEditProductPopup = Inventory.openEditProductPopup;
-        window.addToCart = Sales.addToCart;
-        window.removeFromCart = Sales.removeFromCart;
-        window.finalizeSale = Sales.finalizeSale;
-        window.printReceipt = Sales.printReceipt;
-        window.navigateCalendar = Home.navigateCalendar;
-        window.handleRefund = Home.handleRefund;
-        window.updateSalesView = Home.updateSalesView;
-        
     } catch (error) {
-        console.error('Initialization error:', error);
-        showNotification('Failed to initialize application', 'error');
+        console.error('Critical initialization error:', error);
+        showNotification('Failed to initialize application: ' + error.message, 'error', 5000);
     }
 });
 
 function setupInitialImport() {
+    console.log('Setting up initial import handlers');
     const initialExcelFile = document.getElementById('initialExcelFile');
     const startFreshButton = document.getElementById('startFreshButton');
     
@@ -56,7 +65,7 @@ function setupInitialImport() {
                     await importInitialData(file);
                     localStorage.setItem('systemInitialized', 'true');
                     hideImportOverlay();
-                    showMainDashboard();
+                    await initializeApplication();
                     showNotification('Data imported successfully!', 'success');
                 } catch (error) {
                     console.error('Import error:', error);
@@ -67,30 +76,77 @@ function setupInitialImport() {
     }
 
     if (startFreshButton) {
-        startFreshButton.addEventListener('click', () => {
-            localStorage.clear();
-            localStorage.setItem('systemInitialized', 'true');
-            localStorage.setItem('salesData', '[]');
-            localStorage.setItem('inventoryData', '[]');
-            hideImportOverlay();
-            showMainDashboard();
-            showNotification('System initialized with empty data', 'success');
+        console.log('Adding click handler to start fresh button');
+        startFreshButton.addEventListener('click', async () => {
+            try {
+                console.log('Start Fresh clicked - initializing empty system');
+                
+                // Only initialize required data without clearing everything
+                if (!localStorage.getItem('salesData')) {
+                    localStorage.setItem('salesData', JSON.stringify([]));
+                }
+                if (!localStorage.getItem('inventoryData')) {
+                    localStorage.setItem('inventoryData', JSON.stringify([]));
+                }
+                
+                // Set system as initialized
+                localStorage.setItem('systemInitialized', 'true');
+                
+                // Hide overlay and show main content
+                hideImportOverlay();
+                
+                // Initialize the application
+                await initializeApplication();
+                
+                console.log('Fresh start complete');
+                showNotification('System initialized successfully', 'success');
+            } catch (error) {
+                console.error('Fresh start initialization error:', error);
+                showNotification('Failed to initialize system: ' + error.message, 'error');
+            }
         });
+    }
+}
+
+async function initializeApplication() {
+    try {
+        // Initialize sales data
+        await Sales.initializeSalesData();
+        
+        // Show main dashboard
+        showMainDashboard();
+        
+        // Load initial home section
+        const dashboardContent = document.getElementById('dashboard-content');
+        if (dashboardContent) {
+            await showSection('home');
+            Home.renderCalendar();
+            Home.initializeCalendarKeyboardNavigation();
+        }
+        
+        // Initialize file handling
+        initializeFileHandling();
+        
+        return true;
+    } catch (error) {
+        console.error('Application initialization error:', error);
+        showNotification('Failed to initialize application', 'error');
+        throw error;
     }
 }
 
 function hideImportOverlay() {
     const overlay = document.getElementById('importOverlay');
-    if (overlay) {
-        overlay.style.display = 'none';
+    const mainContent = document.getElementById('mainContent');
+    
+    if (overlay && mainContent) {
+        overlay.classList.add('d-none');
+        mainContent.classList.remove('d-none');
+        console.log('Overlay hidden, main content shown');
     }
 }
 
 function showMainDashboard() {
-    // Show navbar and content
-    document.querySelector('.navbar').style.display = 'flex';
-    document.querySelector('.content').style.display = 'block';
-    
     // Initialize navigation
     document.querySelectorAll('[data-section]').forEach(link => {
         link.addEventListener('click', async (e) => {
@@ -106,7 +162,7 @@ function showMainDashboard() {
         });
     });
 
-    // Initialize export/import functionality for subsequent imports
+    // Initialize export/import functionality
     initializeFileHandling();
 
     // Load initial home section
@@ -126,9 +182,6 @@ async function importInitialData(file) {
                 console.log('File loaded, processing workbook...');
                 const workbook = XLSX.read(data, {type: 'array'});
                 console.log('Available sheets:', workbook.SheetNames);
-                
-                // Clear existing data
-                localStorage.clear();
                 
                 let importSummary = {
                     sales: 0,
@@ -173,7 +226,9 @@ async function importInitialData(file) {
                     showNotification(`Imported ${formattedSalesData.length} sales records`, 'success');
                 } else {
                     console.log('No Sales sheet found in workbook');
-                    localStorage.setItem('salesData', '[]');
+                    if (!localStorage.getItem('salesData')) {
+                        localStorage.setItem('salesData', '[]');
+                    }
                     showNotification('No sales data found in file', 'info');
                 }
                 
@@ -188,7 +243,9 @@ async function importInitialData(file) {
                     showNotification(`Imported ${inventoryData.length} inventory items`, 'success');
                 } else {
                     console.log('No Inventory sheet found in workbook');
-                    localStorage.setItem('inventoryData', '[]');
+                    if (!localStorage.getItem('inventoryData')) {
+                        localStorage.setItem('inventoryData', '[]');
+                    }
                     showNotification('No inventory data found in file', 'info');
                 }
                 
@@ -227,173 +284,117 @@ function updateActiveNavLink(sectionId) {
     });
 }
 
-// Add notification system
-function showNotification(message, type = 'info') {
-    // Remove existing notification if any
-    const existingNotification = document.querySelector('.notification');
-    if (existingNotification) {
-        existingNotification.remove();
+// Updated notification system with Bootstrap's toast component
+function showNotification(message, type = 'info', duration = 3000) {
+    // Remove existing notifications that are done
+    document.querySelectorAll('.toast.hide').forEach(toast => toast.remove());
+
+    // Create toast container if it doesn't exist
+    let toastContainer = document.querySelector('.toast-container');
+    if (!toastContainer) {
+        toastContainer = document.createElement('div');
+        toastContainer.className = 'toast-container position-fixed top-0 end-0 p-3';
+        toastContainer.style.zIndex = '1060';
+        document.body.appendChild(toastContainer);
     }
 
-    // Create new notification
-    const notification = document.createElement('div');
-    notification.className = `notification ${type}`;
-    notification.textContent = message;
-
-    document.body.appendChild(notification);
-
-    // Trigger animation
-    setTimeout(() => notification.classList.add('show'), 10);
-
-    // Auto-hide after 3 seconds
-    setTimeout(() => {
-        notification.classList.remove('show');
-        setTimeout(() => notification.remove(), 300);
-    }, 3000);
+    // Create new toast
+    const toastElement = document.createElement('div');
+    toastElement.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type} border-0`;
+    toastElement.setAttribute('role', 'alert');
+    toastElement.setAttribute('aria-live', 'assertive');
+    toastElement.setAttribute('aria-atomic', 'true');
+    
+    toastElement.innerHTML = `
+        <div class="d-flex">
+            <div class="toast-body">
+                ${message}
+            </div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast" aria-label="Close"></button>
+        </div>
+    `;
+    
+    toastContainer.appendChild(toastElement);
+    
+    // Safely initialize the toast
+    if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
+        const toast = new bootstrap.Toast(toastElement, {
+            delay: duration,
+            animation: true,
+            autohide: true
+        });
+        
+        toast.show();
+    } else {
+        // Fallback if Bootstrap's JS isn't loaded
+        toastElement.style.display = 'block';
+        setTimeout(() => toastElement.remove(), duration);
+    }
+    
+    // Remove toast from DOM after it's hidden
+    toastElement.addEventListener('hidden.bs.toast', () => {
+        toastElement.remove();
+    });
 }
 
 async function showSection(sectionId) {
+    // Wait for DOM to be fully ready
+    if (document.readyState !== 'complete') {
+        await new Promise(resolve => {
+            window.addEventListener('load', resolve);
+        });
+    }
+
     const dashboardContent = document.getElementById('dashboard-content');
     if (!dashboardContent) return;
     
     try {
-        // Remove active class from all sections
-        dashboardContent.querySelectorAll('.dashboard-section').forEach(section => {
+        // Deactivate all sections first
+        document.querySelectorAll('.dashboard-section').forEach(section => {
             section.classList.remove('active');
         });
 
+        // Check if section already exists
+        let sectionElement = document.getElementById(sectionId);
+        if (!sectionElement) {
+            // Load new section only if it doesn't exist
+            const fileName = sectionId === 'sale' ? 'sales' : sectionId;
+            const templateContent = await fetchTemplate(`../pages/${fileName}-dashboard.html`);
+            
+            dashboardContent.innerHTML = templateContent;
+            sectionElement = document.getElementById(sectionId);
+        }
+        
+        // Activate the section
+        if (sectionElement) {
+            sectionElement.classList.add('active');
+        }
+        
+        // Initialize section-specific functionality only when needed
+        if (sectionId === 'sale' || sectionId === 'inventory') {
+            await Inventory.initializeInventoryData();
+        }
+        
         switch(sectionId) {
             case 'home':
-                const templateContent = await fetchTemplate('../pages/home-dashboard.html');
-                dashboardContent.innerHTML = templateContent;
-                break;
-                
-            case 'inventory':
-                dashboardContent.innerHTML = `
-                    <div id="inventory" class="dashboard-section active">
-                        <h2>Inventory Dashboard</h2>
-                        <div class="inventory-container" style="display: flex;">
-                            <div class="add-product-column" style="flex: 0.8; padding-right: 20px; border-right: 1px solid #ddd;">
-                                <div class="add-product-form">
-                                    <h3>Add New Product</h3>
-                                    <label for="productName">Product Name</label>
-                                    <input type="text" id="productName" placeholder="Enter product name" class="modern-input">
-                                    <label for="productVariant">Variant</label>
-                                    <input type="text" id="productVariant" placeholder="Enter variant" class="modern-input">
-                                    <label for="productCostPrice">Cost Price</label>
-                                    <input type="number" id="productCostPrice" placeholder="Enter cost price" step="0.01" class="modern-input">
-                                    <label for="productPrice">Price</label>
-                                    <input type="number" id="productPrice" placeholder="Enter price" step="0.01" class="modern-input">
-                                    <label for="productQuantity">Quantity</label>
-                                    <input type="number" id="productQuantity" placeholder="Enter quantity" class="modern-input">
-                                    <div>
-                                        <button class="modern-button" onclick="addProduct()">Add</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="inventory-table" style="flex: 2;">
-                                <div style="margin-bottom: 10px;">
-                                    <input type="text" id="searchInventory" placeholder="Search inventory..." class="modern-input" onkeyup="searchInventory()">
-                                </div>
-                                <table id="inventoryTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Product</th>
-                                            <th>Variant</th>
-                                            <th>Cost Price</th>
-                                            <th>Price</th>
-                                            <th>Quantity</th>
-                                            <th>Actions</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                        </div>
-                    </div>`;
-                break;
-                
-            case 'sale':
-                dashboardContent.innerHTML = `
-                    <div id="sale" class="dashboard-section active">
-                        <h2>Sales Dashboard</h2>
-                        <div class="sales-container">
-                            <div class="inventory-list">
-                                <h3>Available Items</h3>
-                                <table id="salesInventoryTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Item</th>
-                                            <th>Price</th>
-                                            <th>Available</th>
-                                            <th>Qty</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                            </div>
-                            <div class="cart">
-                                <h3>Shopping Cart</h3>
-                                <table id="cartTable">
-                                    <thead>
-                                        <tr>
-                                            <th>Item</th>
-                                            <th>Price</th>
-                                            <th>Qty</th>
-                                            <th>Total</th>
-                                            <th>Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody></tbody>
-                                </table>
-                                <div>
-                                    <h4>Total: $<span id="cartTotal">0.00</span></h4>
-                                    <button onclick="finalizeSale()">Finalize Sale</button>
-                                </div>
-                                <div id="receipt" style="display: none;">
-                                    <h3>Receipt</h3>
-                                    <div id="receiptContent"></div>
-                                    <button onclick="printReceipt()">Print Receipt</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>`;
-                break;
-        }
-
-        // Initialize section-specific functionality
-        await initializeSection(sectionId);
-    } catch (error) {
-        console.error('Error loading dashboard section:', error);
-        dashboardContent.innerHTML = `<div class="alert alert-danger">Error loading ${sectionId} dashboard. Please try again.</div>`;
-    }
-}
-
-async function initializeSection(sectionId) {
-    try {
-        switch (sectionId) {
-            case 'home':
-                // Initialize sales data first
-                Sales.initializeSalesData();
-                Home.renderCalendar();
+                await Home.renderCalendar();
                 Home.initializeCalendarKeyboardNavigation();
                 break;
             case 'inventory':
-                await Promise.all([
-                    Inventory.renderInventoryTable(),
-                    Inventory.makeInventoryEditable()
-                ]);
-                Inventory.initializeTableKeyboardNav();
+                await Inventory.renderInventoryTable();
                 break;
             case 'sale':
                 await Sales.renderSalesInventory();
                 Sales.initializeTableKeyboardNav();
                 break;
         }
+
+        // Update active navigation link
+        updateActiveNavLink(sectionId);
+        
     } catch (error) {
-        console.error('Error initializing section:', error);
-        showNotification('Error initializing section', 'error');
+        console.error('Error loading section:', error);
+        showNotification('Error loading section: ' + error.message, 'error');
     }
 }
 
@@ -463,19 +464,20 @@ async function importFromExcel() {
         return;
     }
 
-    // Show loading notification
+    // Remove any existing notifications
+    const existingNotifications = document.querySelectorAll('.notification');
+    existingNotifications.forEach(notification => notification.remove());
+
+    // Show initial loading notification
     showNotification('Processing file...', 'info');
-    console.log('Starting import of file:', file.name);
 
     try {
         const reader = new FileReader();
+        
         reader.onload = async function(e) {
             try {
                 const data = new Uint8Array(e.target.result);
-                console.log('File loaded, processing workbook...');
                 const workbook = XLSX.read(data, {type: 'array'});
-                console.log('Available sheets:', workbook.SheetNames);
-                
                 let importSummary = {
                     sales: 0,
                     inventory: 0
@@ -485,64 +487,63 @@ async function importFromExcel() {
                 if (workbook.SheetNames.includes('Sales')) {
                     const salesSheet = workbook.Sheets['Sales'];
                     const salesData = XLSX.utils.sheet_to_json(salesSheet);
-                    console.log(`Found ${salesData.length} sales records`);
                     
-                    const formattedSalesData = salesData.map(sale => {
-                        console.log('Processing sale:', sale);
-                        const saleItems = sale.Items.split(', ').map(item => {
-                            const match = item.match(/(.*) \((\d+)\)/);
+                    if (salesData.length > 0) {
+                        const formattedSalesData = salesData.map(sale => {
+                            const saleItems = sale.Items.split(', ').map(item => {
+                                const match = item.match(/(.*) \((\d+)\)/);
+                                return {
+                                    name: match[1],
+                                    quantity: parseInt(match[2]),
+                                    price: sale.Total / parseInt(match[2]),
+                                    total: sale.Total
+                                };
+                            });
+                            
                             return {
-                                name: match[1],
-                                quantity: parseInt(match[2]),
-                                price: sale.Total / parseInt(match[2]),
-                                total: sale.Total
+                                date: new Date(sale.Date),
+                                items: saleItems,
+                                total: sale.Total,
+                                refunded: sale.Status === 'Refunded',
+                                refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
                             };
                         });
                         
-                        return {
-                            date: new Date(sale.Date),
-                            items: saleItems,
-                            total: sale.Total,
-                            refunded: sale.Status === 'Refunded',
-                            refundDate: sale.Status === 'Refunded' ? new Date(sale.RefundDate) : null
-                        };
-                    });
-                    
-                    importSummary.sales = formattedSalesData.length;
-                    console.log('Formatted sales data:', formattedSalesData);
-                    
-                    localStorage.setItem('salesData', JSON.stringify(formattedSalesData.map(sale => ({
-                        ...sale,
-                        date: sale.date.toISOString(),
-                        refundDate: sale.refundDate ? sale.refundDate.toISOString() : null
-                    }))));
-                    showNotification(`Imported ${formattedSalesData.length} sales records`, 'success');
+                        importSummary.sales = formattedSalesData.length;
+                        localStorage.setItem('salesData', JSON.stringify(formattedSalesData.map(sale => ({
+                            ...sale,
+                            date: sale.date.toISOString(),
+                            refundDate: sale.refundDate ? sale.refundDate.toISOString() : null
+                        }))));
+                        
+                        showNotification(`Imported ${formattedSalesData.length} sales records`, 'success', 2000);
+                    }
                 } else {
-                    console.log('No Sales sheet found in workbook');
-                    showNotification('No sales data found in file', 'info');
+                    showNotification('No sales data sheet found', 'info', 2000);
                 }
                 
                 // Import inventory data if available
                 if (workbook.SheetNames.includes('Inventory')) {
                     const inventorySheet = workbook.Sheets['Inventory'];
                     const inventoryData = XLSX.utils.sheet_to_json(inventorySheet);
-                    console.log(`Found ${inventoryData.length} inventory items`);
-                    importSummary.inventory = inventoryData.length;
                     
-                    localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
-                    showNotification(`Imported ${inventoryData.length} inventory items`, 'success');
+                    if (inventoryData.length > 0) {
+                        importSummary.inventory = inventoryData.length;
+                        localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
+                        showNotification(`Imported ${inventoryData.length} inventory items`, 'success', 2000);
+                    }
                 } else {
-                    console.log('No Inventory sheet found in workbook');
-                    showNotification('No inventory data found in file', 'info');
+                    showNotification('No inventory data sheet found', 'info', 2000);
                 }
-                
-                // Final success notification with summary
+
+                // Final success notification
                 setTimeout(() => {
                     showNotification(
                         `Import complete: ${importSummary.sales} sales, ${importSummary.inventory} inventory items`, 
-                        'success'
+                        'success',
+                        3000
                     );
-                }, 2000);
+                }, 2500);
 
                 // Refresh displays
                 Sales.initializeSalesData();
@@ -559,19 +560,19 @@ async function importFromExcel() {
                 fileInput.value = ''; // Reset the input
             } catch (error) {
                 console.error('Import processing error:', error);
-                showNotification('Failed to process import: ' + error.message, 'error');
+                showNotification('Failed to process import: ' + error.message, 'error', 5000);
             }
         };
         
         reader.onerror = (error) => {
             console.error('File reading error:', error);
-            showNotification('Failed to read the file', 'error');
+            showNotification('Failed to read the file', 'error', 5000);
         };
         
         await reader.readAsArrayBuffer(file);
     } catch (error) {
         console.error('File handling error:', error);
-        showNotification('Error handling file', 'error');
+        showNotification('Error handling file', 'error', 5000);
     }
 }
 

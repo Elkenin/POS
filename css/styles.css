@@ -1,9 +1,10 @@
-/* Custom styles and animations not covered by Bootstrap */
+/* Global styles */
 body {
     height: 100vh;
     overflow: hidden;
 }
 
+/* Dashboard sections */
 .dashboard-section {
     display: none;
     height: 100%;
@@ -18,36 +19,259 @@ body {
     transform: translateY(0);
 }
 
-/* Notifications */
-.notification {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    padding: 15px 20px;
-    border-radius: 4px;
-    color: white;
-    max-width: 300px;
-    z-index: 1000;
-    opacity: 0;
-    transform: translateY(-20px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
+/* Navigation */
+.nav-link {
+    position: relative;
+    transition: background-color 0.3s ease;
 }
 
-.notification.show {
-    opacity: 1;
-    transform: translateY(0);
+.nav-link::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 2px;
+    background-color: #4CAF50;
+    transition: width 0.3s ease;
 }
 
-.notification.success {
+.nav-link.active::after {
+    width: 80%;
+}
+
+.nav-link:hover {
+    background-color: rgba(76, 175, 80, 0.1);
+}
+
+.nav-link.active {
+    color: #4CAF50 !important;
+}
+
+.nav-link.active img {
+    filter: drop-shadow(0 0 2px rgba(76, 175, 80, 0.5));
+}
+
+/* Calendar styles */
+#salesCalendar td {
+    height: 60px;
+    vertical-align: top;
+    position: relative;
+    padding: 3px;
+    font-size: 0.9em;
+}
+
+#salesCalendar td.current-month {
+    background-color: #fff;
+}
+
+#salesCalendar td.adjacent-month {
+    background-color: #f8f9fa;
+    color: #6c757d;
+}
+
+#salesCalendar td.selected {
+    background-color: rgba(76, 175, 80, 0.1);
+    font-weight: bold;
+}
+
+#salesCalendar td.selected::after {
+    content: '';
+    position: absolute;
+    bottom: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
     background-color: #4CAF50;
 }
 
-.notification.error {
-    background-color: #f44336;
+.sales-total {
+    font-size: 11px;
+    color: #2e7d32;
+    margin-top: 3px;
 }
 
-.notification.info {
-    background-color: #2196F3;
+/* Sales and refund styles */
+.refunded-tag {
+    display: inline-block;
+    padding: 2px 6px;
+    background-color: #dc3545;
+    color: white;
+    border-radius: 3px;
+    font-size: 0.8em;
+    margin-left: 8px;
+}
+
+.refunded-sale {
+    opacity: 0.7;
+    background-color: #f8d7da;
+    border-color: #f5c6cb;
+}
+
+/* Sales dashboard styles */
+.receipt-container {
+    position: relative;
+    min-height: 200px;
+}
+
+.refund-stamp {
+    color: #dc3545;
+    border: 2px solid #dc3545;
+    padding: 10px;
+    font-size: 24px;
+    font-weight: bold;
+    transform: rotate(-15deg);
+    opacity: 0.3;
+    z-index: 1;
+}
+
+#salesInventoryTable input[type="number"] {
+    min-width: 60px;
+}
+
+.table th {
+    background-color: #f8f9fa;
+    font-weight: 600;
+}
+
+/* Inventory dashboard styles */
+#inventoryTable td {
+    vertical-align: middle;
+}
+
+#inventoryTable td:nth-child(3),
+#inventoryTable td:nth-child(4) {
+    text-align: right;
+}
+
+#inventoryTable td:nth-child(5) {
+    text-align: center;
+}
+
+#inventoryTable td:last-child {
+    text-align: right;
+}
+
+.add-product-form label {
+    font-weight: 500;
+    color: #212529;
+}
+
+.add-product-form .input-group-text {
+    background-color: #f8f9fa;
+    color: #495057;
+}
+
+/* Improve form validation feedback */
+.add-product-form input:invalid {
+    border-color: #dc3545;
+    padding-right: calc(1.5em + 0.75rem);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12' width='12' height='12' fill='none' stroke='%23dc3545'%3e%3ccircle cx='6' cy='6' r='4.5'/%3e%3cpath stroke-linejoin='round' d='M5.8 3.6h.4L6 6.5z'/%3e%3ccircle cx='6' cy='8.2' r='.6' fill='%23dc3545' stroke='none'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+.add-product-form input:valid {
+    border-color: #198754;
+    padding-right: calc(1.5em + 0.75rem);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 8 8'%3e%3cpath fill='%23198754' d='M2.3 6.73L.6 4.53c-.4-1.04.46-1.4 1.1-.8l1.1 1.4 3.4-3.8c.6-.63 1.6-.27 1.2.7l-4 4.6c-.43.5-.8.4-1.1.1z'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+}
+
+/* Low stock warning */
+.low-stock {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+/* Inventory table styles */
+#inventoryTable {
+    border-collapse: collapse;
+    margin-bottom: 0;
+}
+
+#inventoryTable th {
+    background-color: #f8f9fa;
+    border-bottom: 2px solid #dee2e6;
+    font-weight: 600;
+    padding: 1rem;
+}
+
+#inventoryTable td {
+    padding: 1rem;
+    vertical-align: middle;
+    border-bottom: 1px solid #dee2e6;
+}
+
+#inventoryTable tbody tr:hover {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+#inventoryTable .btn-group {
+    white-space: nowrap;
+}
+
+#inventoryTable .btn {
+    padding: 0.375rem 0.75rem;
+}
+
+/* Table cell alignments */
+#inventoryTable td:nth-child(3),
+#inventoryTable td:nth-child(4),
+#inventoryTable th:nth-child(3),
+#inventoryTable th:nth-child(4) {
+    text-align: right;
+}
+
+#inventoryTable td:nth-child(5),
+#inventoryTable th:nth-child(5) {
+    text-align: center;
+}
+
+#inventoryTable td:last-child {
+    text-align: right;
+}
+
+/* Low quantity warning */
+#inventoryTable .low-quantity {
+    color: #dc3545;
+    font-weight: 500;
+}
+
+/* Make tables more compact on smaller screens */
+@media (max-width: 768px) {
+    .table td, .table th {
+        padding: 0.5rem;
+    }
+    
+    .btn-sm {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.75rem;
+    }
+}
+
+/* Focus styles for accessibility */
+button:focus-visible,
+input:focus-visible,
+[role="gridcell"]:focus-visible,
+[tabindex="0"]:focus-visible {
+    outline: 2px solid #4CAF50;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
+}
+
+/* Notifications */
+.toast-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 2000; /* Higher than the overlay's z-index */
 }
 
 /* Loading animation */
@@ -73,14 +297,4 @@ body {
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-}
-
-/* Focus outline for accessibility */
-button:focus-visible,
-input:focus-visible,
-[role="gridcell"]:focus-visible,
-[tabindex="0"]:focus-visible {
-    outline: 2px solid #4CAF50;
-    outline-offset: 2px;
-    box-shadow: 0 0 0 4px rgba(76, 175, 80, 0.2);
 }

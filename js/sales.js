@@ -6,93 +6,22 @@ let salesData = [];
 function initializeSalesData() {
     try {
         const storedData = localStorage.getItem('salesData');
-        console.log('Loading sales data from localStorage:', storedData);
+        
+        // Clear existing sales data first
+        salesData.length = 0;
         
         if (storedData) {
             const parsedData = JSON.parse(storedData);
-            console.log('Parsed stored data:', parsedData);
-            
-            // Clear existing sales data first
-            salesData.length = 0;
             
             // Convert dates back to Date objects
             salesData.push(...parsedData.map(sale => ({
                 ...sale,
                 date: new Date(sale.date)
             })));
-        } else {
-            console.log('No existing sales data, initializing with test data');
-            // Initialize with test data in UTC for multiple dates in April
-            salesData = [
-                {
-                    date: new Date(Date.UTC(2025, 3, 5, 10, 0, 0)),
-                    items: [{
-                        name: "Early Month Product",
-                        price: 79.99,
-                        quantity: 1,
-                        total: 79.99
-                    }],
-                    total: 79.99
-                },
-                {
-                    date: new Date(Date.UTC(2025, 3, 15, 14, 30, 0)),
-                    items: [{
-                        name: "Mid Month Product",
-                        price: 129.99,
-                        quantity: 2,
-                        total: 259.98
-                    }],
-                    total: 259.98
-                },
-                {
-                    date: new Date(Date.UTC(2025, 3, 20, 12, 0, 0)),
-                    items: [{
-                        name: "Test Product 1",
-                        price: 99.99,
-                        quantity: 1,
-                        total: 99.99
-                    }],
-                    total: 99.99
-                },
-                {
-                    date: new Date(Date.UTC(2025, 3, 21, 14, 0, 0)),
-                    items: [{
-                        name: "Test Product 2",
-                        price: 149.99,
-                        quantity: 1,
-                        total: 149.99
-                    }],
-                    total: 149.99
-                },
-                {
-                    date: new Date(Date.UTC(2025, 3, 22, 15, 30, 0)),
-                    items: [{
-                        name: "Additional Product",
-                        price: 89.99,
-                        quantity: 2,
-                        total: 179.98
-                    }],
-                    total: 179.98
-                },
-                {
-                    date: new Date(Date.UTC(2025, 3, 25, 16, 45, 0)),
-                    items: [{
-                        name: "Late Month Product",
-                        price: 199.99,
-                        quantity: 1,
-                        total: 199.99
-                    }],
-                    total: 199.99
-                }
-            ];
-            
-            // Save initial test data
-            saveSalesData();
         }
         
         // Sort sales data by date
         salesData.sort((a, b) => a.date - b.date);
-        console.log('Final initialized sales data:', salesData);
     } catch (error) {
         console.error('Error initializing sales data:', error);
         salesData = [];
@@ -114,9 +43,6 @@ function saveSalesData() {
         console.error('Error saving sales data:', error);
     }
 }
-
-// Initialize sales data when module loads
-initializeSalesData();
 
 function initializeTableKeyboardNav() {
     ['salesInventoryTable', 'cartTable'].forEach(tableId => {
@@ -182,16 +108,33 @@ function renderSalesInventory() {
     if (!tableBody) return;
     
     tableBody.innerHTML = '';
+    
+    if (!inventoryData || inventoryData.length === 0) {
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No items available</td></tr>';
+        return;
+    }
+    
     inventoryData.forEach((item, index) => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${item.name} ${item.variant ? `(${item.variant})` : ''}</td>
-            <td>$${item.price.toFixed(2)}</td>
-            <td>${item.quantity}</td>
-            <td><input type="number" id="qty-${index}" value="1" min="1" max="${item.quantity}" style="width: 50px;"></td>
-            <td><button onclick="addToCart(${index})">Add to Cart</button></td>
-        `;
-        tableBody.appendChild(row);
+        if (item.quantity > 0) {  // Only show items with available quantity
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${item.name} ${item.variant ? `(${item.variant})` : ''}<br>
+                    <small class="text-muted">ID: ${item.id || '-'}</small>
+                </td>
+                <td>$${item.price.toFixed(2)}</td>
+                <td>${item.quantity}</td>
+                <td>
+                    <input type="number" class="form-control form-control-sm w-75" 
+                        id="qty-${index}" value="1" min="1" max="${item.quantity}">
+                </td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="addToCart(${index})">
+                        Add to Cart
+                    </button>
+                </td>
+            `;
+            tableBody.appendChild(row);
+        }
     });
 }
 
@@ -200,12 +143,13 @@ function addToCart(index) {
     const quantity = parseInt(qtyInput.value);
     
     if (quantity > 0 && quantity <= inventoryData[index].quantity) {
-        const existingItem = cartItems.find(item => item.index === index);
+        const existingItem = cartItems.find(item => item.id === inventoryData[index].id);
         
         if (existingItem) {
             existingItem.quantity += quantity;
         } else {
             cartItems.push({
+                id: inventoryData[index].id,
                 index: index,
                 name: inventoryData[index].name,
                 price: inventoryData[index].price,
@@ -234,7 +178,11 @@ function renderCart() {
             <td>$${item.price.toFixed(2)}</td>
             <td>${item.quantity}</td>
             <td>$${itemTotal.toFixed(2)}</td>
-            <td><button onclick="removeFromCart(${i})">Remove</button></td>
+            <td>
+                <button class="btn btn-danger btn-sm" onclick="removeFromCart(${i})">
+                    Remove
+                </button>
+            </td>
         `;
         tableBody.appendChild(row);
     });
@@ -309,17 +257,20 @@ function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, r
     if (!receiptContent) return;
 
     let receiptHTML = `
-        <div role="region" aria-label="Sale Receipt">
-            <h4>Sale Receipt${isRefunded ? ' (REFUNDED)' : ''}</h4>
-            <p>Date: ${saleDate.toLocaleString()}</p>
-            ${isRefunded ? `<p class="refund-info">Refunded on: ${new Date(refundDate).toLocaleString()}</p>` : ''}
-            <table style="width: 100%; border-collapse: collapse;" role="table">
-                <thead>
+        <div class="receipt-container" role="region" aria-label="Sale Receipt">
+            <div class="text-center mb-3">
+                <h4 class="mb-2">Sale Receipt${isRefunded ? ' <span class="badge bg-danger">REFUNDED</span>' : ''}</h4>
+                <p class="text-muted mb-1">Date: ${saleDate.toLocaleString()}</p>
+                ${isRefunded ? `<p class="text-danger mb-3">Refunded on: ${new Date(refundDate).toLocaleString()}</p>` : ''}
+            </div>
+            
+            <table class="table table-sm" role="table">
+                <thead class="table-light">
                     <tr>
                         <th scope="col">Item</th>
-                        <th scope="col">Price</th>
-                        <th scope="col">Qty</th>
-                        <th scope="col">Total</th>
+                        <th scope="col" class="text-end">Price</th>
+                        <th scope="col" class="text-center">Qty</th>
+                        <th scope="col" class="text-end">Total</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -329,9 +280,9 @@ function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, r
         receiptHTML += `
             <tr>
                 <td>${item.name}</td>
-                <td>$${item.price.toFixed(2)}</td>
-                <td>${item.quantity}</td>
-                <td>$${item.total.toFixed(2)}</td>
+                <td class="text-end">$${item.price.toFixed(2)}</td>
+                <td class="text-center">${item.quantity}</td>
+                <td class="text-end">$${item.total.toFixed(2)}</td>
             </tr>
         `;
     });
@@ -340,12 +291,12 @@ function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, r
                 </tbody>
                 <tfoot>
                     <tr>
-                        <td colspan="3"><strong>Total:</strong></td>
-                        <td><strong>$${totalAmount.toFixed(2)}</strong></td>
+                        <td colspan="3" class="text-end"><strong>Total:</strong></td>
+                        <td class="text-end"><strong>$${totalAmount.toFixed(2)}</strong></td>
                     </tr>
                 </tfoot>
             </table>
-            ${isRefunded ? '<div class="refund-stamp">REFUNDED</div>' : ''}
+            ${isRefunded ? '<div class="refund-stamp position-absolute top-50 start-50 translate-middle">REFUNDED</div>' : ''}
         </div>
     `;
     
@@ -353,7 +304,7 @@ function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, r
     
     const receiptElement = document.getElementById('receipt');
     if (receiptElement) {
-        receiptElement.style.display = 'block';
+        receiptElement.classList.remove('d-none');
     }
 }
 
@@ -493,6 +444,34 @@ function isDateEqual(date1, date2) {
 
 // Make processRefund available globally
 window.processRefund = processRefund;
+
+// Update initialization code at the beginning of the file
+document.addEventListener('DOMContentLoaded', () => {
+    initializeSalesData();
+    const saleSection = document.getElementById('sale');
+    
+    // Create an observer to watch for when the sales section becomes active
+    const observer = new MutationObserver((mutations) => {
+        mutations.forEach((mutation) => {
+            if (mutation.target.classList.contains('active')) {
+                renderSalesInventory();
+            }
+        });
+    });
+
+    // Start observing the sales section
+    if (saleSection) {
+        observer.observe(saleSection, { 
+            attributes: true,
+            attributeFilter: ['class']
+        });
+        
+        // Initial render if the section is already active
+        if (saleSection.classList.contains('active')) {
+            renderSalesInventory();
+        }
+    }
+});
 
 export { 
     salesData,

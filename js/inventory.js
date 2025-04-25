@@ -1,29 +1,103 @@
 // Load saved inventory data
-let inventoryData = JSON.parse(localStorage.getItem('inventoryData')) || [];
+let inventoryData = [];
+let renderAttempts = 0;
+const MAX_RENDER_ATTEMPTS = 5;
 
-function saveInventoryData() {
-    localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
+// Initialize data when the module loads
+let initialized = false;
+
+function initializeInventoryData() {
+    if (initialized) return;
+    
+    return new Promise((resolve) => {
+        const checkDom = () => {
+            const tableBody = document.getElementById('inventoryTableBody');
+            if (tableBody) {
+                try {
+                    const storedData = localStorage.getItem('inventoryData');
+                    inventoryData = storedData ? JSON.parse(storedData) : [];
+                    renderInventoryTable();
+                    initialized = true;
+                    resolve();
+                } catch (error) {
+                    console.error('Error initializing inventory data:', error);
+                    inventoryData = [];
+                    resolve();
+                }
+            } else {
+                requestAnimationFrame(checkDom);
+            }
+        };
+        
+        checkDom();
+    });
 }
 
-function addProduct() {
-    const name = document.getElementById('productName').value;
-    const variant = document.getElementById('productVariant').value;
-    const costPrice = parseFloat(document.getElementById('productCostPrice').value);
-    const price = parseFloat(document.getElementById('productPrice').value);
-    const quantity = parseInt(document.getElementById('productQuantity').value);
+function saveInventoryData() {
+    try {
+        localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
+        console.log('Inventory data saved successfully');
+    } catch (error) {
+        console.error('Error saving inventory data:', error);
+    }
+}
 
-    if (name && variant && !isNaN(costPrice) && !isNaN(price) && !isNaN(quantity)) {
-        inventoryData.push({
+function updateInventoryData(newData) {
+    inventoryData = newData;
+    saveInventoryData();
+    renderInventoryTable();
+}
+
+function addProduct(event) {
+    if (event) {
+        event.preventDefault();
+    }
+
+    try {
+        const name = document.getElementById('productName').value.trim();
+        const variant = document.getElementById('productVariant').value.trim();
+        const costPrice = parseFloat(document.getElementById('productCostPrice').value);
+        const price = parseFloat(document.getElementById('productPrice').value);
+        const quantity = parseInt(document.getElementById('productQuantity').value);
+
+        if (!name || isNaN(costPrice) || isNaN(price) || isNaN(quantity)) {
+            alert('Please fill in all required fields correctly');
+            return;
+        }
+
+        // Generate a unique ID using timestamp and random number
+        const productId = `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
+        // Create new product object
+        const newProduct = {
+            id: productId,
             name: name,
             variant: variant,
             costPrice: costPrice,
             price: price,
             quantity: quantity
-        });
+        };
 
+        // Add to inventory data
+        inventoryData.push(newProduct);
+        
+        // Save to localStorage
         saveInventoryData();
+        
+        // Clear form
         clearProductForm();
+        
+        // Update table
         renderInventoryTable();
+        
+        // Show success message
+        showNotification('Product added successfully', 'success');
+        
+        return false; // Prevent form submission
+    } catch (error) {
+        console.error('Error adding product:', error);
+        showNotification('Error adding product', 'error');
+        return false;
     }
 }
 
@@ -35,119 +109,132 @@ function clearProductForm() {
     document.getElementById('productQuantity').value = '';
 }
 
-function removeItem(index) {
-    inventoryData.splice(index, 1);
-    saveInventoryData();
-    renderInventoryTable();
+function showNotification(message, type = 'info') {
+    const event = new CustomEvent('show-notification', {
+        detail: { message, type }
+    });
+    window.dispatchEvent(event);
 }
 
 function renderInventoryTable() {
-    const tableBody = document.querySelector('#inventoryTable tbody');
-    if (!tableBody) return;
+    const tableBody = document.getElementById('inventoryTableBody');
+    if (!tableBody) {
+        console.log('Table body not found, waiting for DOM...');
+        return;
+    }
     
+    renderAttempts = 0; // Reset counter on successful render
     tableBody.innerHTML = '';
+    
+    if (inventoryData.length === 0) {
+        const emptyRow = document.createElement('tr');
+        emptyRow.innerHTML = '<td colspan="7" class="text-center text-muted py-4">No inventory items found</td>';
+        tableBody.appendChild(emptyRow);
+        return;
+    }
+
     inventoryData.forEach((item, index) => {
         const row = document.createElement('tr');
-        const cells = [
-            { text: item.name, label: 'Product name' },
-            { text: item.variant, label: 'Variant' },
-            { text: `$${item.costPrice.toFixed(2)}`, label: 'Cost price' },
-            { text: `$${item.price.toFixed(2)}`, label: 'Price' },
-            { text: item.quantity.toString(), label: 'Quantity' }
-        ];
-
-        cells.forEach(({ text, label }) => {
-            const cell = document.createElement('td');
-            cell.textContent = text;
-            cell.setAttribute('tabindex', '0');
-            cell.setAttribute('role', 'gridcell');
-            cell.setAttribute('aria-label', `${label}: ${text}`);
-            row.appendChild(cell);
-        });
-
-        const actionsCell = document.createElement('td');
-        actionsCell.className = 'actions-cell';
-        actionsCell.innerHTML = `
-            <button onclick="removeItem(${index})" aria-label="Remove ${item.name}">Remove</button>
-            <button onclick="openEditProductPopup(${index})" aria-label="Edit ${item.name}">Edit</button>
+        row.innerHTML = `
+            <td class="py-3 px-3">${item.id || '-'}</td>
+            <td class="py-3 px-3">${item.name}</td>
+            <td>${item.variant || '-'}</td>
+            <td class="text-end">$${item.costPrice.toFixed(2)}</td>
+            <td class="text-end">$${item.price.toFixed(2)}</td>
+            <td class="text-center ${item.quantity <= 5 ? 'text-danger' : ''}">${item.quantity}</td>
+            <td class="text-end px-3">
+                <div class="btn-group btn-group-sm">
+                    <button class="btn btn-outline-primary" onclick="openEditProductPopup(${index})">
+                        <i class="bi bi-pencil"></i> Edit
+                    </button>
+                    <button class="btn btn-outline-danger" onclick="removeItem(${index})">
+                        <i class="bi bi-trash"></i> Remove
+                    </button>
+                </div>
+            </td>
         `;
-        row.appendChild(actionsCell);
         tableBody.appendChild(row);
     });
-
-    // Initialize keyboard navigation
-    initializeTableKeyboardNav();
-
-    // Update live region
-    const liveRegion = document.getElementById('inventoryUpdateRegion');
-    if (liveRegion) {
-        liveRegion.textContent = `Inventory table updated with ${inventoryData.length} items`;
-    }
 }
 
-function makeInventoryEditable() {
-    addLiveRegion();
-    const table = document.getElementById('inventoryTable');
-    if (!table) return;
-
-    table.addEventListener('click', function (event) {
-        const cell = event.target;
-        if (cell.tagName === 'TD' && !cell.classList.contains('actions-cell')) {
-            const originalValue = cell.textContent;
-            const input = document.createElement('input');
-            input.type = 'text';
-            input.value = originalValue;
-            input.style.width = '100%';
-            cell.textContent = '';
-            cell.appendChild(input);
-            input.focus();
-
-            input.addEventListener('blur', function () {
-                cell.textContent = input.value;
-            });
-
-            input.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') {
-                    input.blur();
-                }
-            });
-        }
-    });
+function removeItem(index) {
+    if (confirm('Are you sure you want to remove this item?')) {
+        inventoryData.splice(index, 1);
+        saveInventoryData();
+        renderInventoryTable();
+        showNotification('Product removed successfully', 'success');
+    }
 }
 
 function searchInventory() {
     const searchInput = document.getElementById('searchInventory').value.toLowerCase();
     const tableRows = document.querySelectorAll('#inventoryTable tbody tr');
 
+    let foundItems = 0;
     tableRows.forEach(row => {
         const cells = row.querySelectorAll('td');
         const rowText = Array.from(cells).map(cell => cell.textContent.toLowerCase()).join(' ');
-        row.style.display = rowText.includes(searchInput) ? '' : 'none';
+        
+        if (rowText.includes(searchInput)) {
+            row.style.display = '';
+            foundItems++;
+        } else {
+            row.style.display = 'none';
+        }
     });
+
+    // Show no results message if needed
+    const tbody = document.querySelector('#inventoryTable tbody');
+    const noResultsRow = tbody.querySelector('.no-results');
+    if (foundItems === 0) {
+        if (!noResultsRow) {
+            const row = document.createElement('tr');
+            row.className = 'no-results';
+            row.innerHTML = '<td colspan="6" class="text-center text-muted">No matching items found</td>';
+            tbody.appendChild(row);
+        }
+    } else if (noResultsRow) {
+        noResultsRow.remove();
+    }
 }
 
 function openEditProductPopup(index) {
     const product = inventoryData[index];
+    
     document.getElementById('productName').value = product.name;
-    document.getElementById('productVariant').value = product.variant;
+    document.getElementById('productVariant').value = product.variant || '';
     document.getElementById('productCostPrice').value = product.costPrice;
     document.getElementById('productPrice').value = product.price;
     document.getElementById('productQuantity').value = product.quantity;
 
     const addButton = document.querySelector('.add-product-form button');
-    addButton.textContent = 'Save';
+    addButton.textContent = 'Save Changes';
+    addButton.className = 'btn btn-primary w-100';
     addButton.onclick = () => saveProduct(index);
+
+    // Scroll form into view
+    document.querySelector('.add-product-form').scrollIntoView({ behavior: 'smooth' });
 }
 
 function saveProduct(index) {
-    const name = document.getElementById('productName').value;
-    const variant = document.getElementById('productVariant').value;
-    const costPrice = parseFloat(document.getElementById('productCostPrice').value);
-    const price = parseFloat(document.getElementById('productPrice').value);
-    const quantity = parseInt(document.getElementById('productQuantity').value);
+    try {
+        const name = document.getElementById('productName').value.trim();
+        const variant = document.getElementById('productVariant').value.trim();
+        const costPrice = parseFloat(document.getElementById('productCostPrice').value);
+        const price = parseFloat(document.getElementById('productPrice').value);
+        const quantity = parseInt(document.getElementById('productQuantity').value);
 
-    if (name && variant && !isNaN(costPrice) && !isNaN(price) && !isNaN(quantity)) {
+        if (!name || isNaN(costPrice) || isNaN(price) || isNaN(quantity)) {
+            alert('Please fill in all required fields correctly');
+            return;
+        }
+
+        // Preserve existing ID or generate new one
+        const existingProduct = inventoryData[index];
+        const productId = existingProduct?.id || `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+
         inventoryData[index] = {
+            id: productId,
             name: name,
             variant: variant,
             costPrice: costPrice,
@@ -157,68 +244,69 @@ function saveProduct(index) {
 
         saveInventoryData();
         clearProductForm();
-        renderInventoryTable();
         
         const addButton = document.querySelector('.add-product-form button');
-        addButton.textContent = 'Add';
+        addButton.textContent = 'Add Product';
+        addButton.className = 'btn btn-success w-100';
         addButton.onclick = addProduct;
+        
+        renderInventoryTable();
+        showNotification('Product updated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error updating product:', error);
+        showNotification('Error updating product', 'error');
     }
 }
 
-function initializeTableKeyboardNav() {
-    const table = document.getElementById('inventoryTable');
-    if (!table) return;
+// Wait for DOM content and inventory section to be ready before initializing
+function tryInitialize() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeInventoryData);
+        return;
+    }
+    initializeInventoryData();
+}
 
-    let focusedCell = { row: 0, col: 0 };
+// Reset initialization flag when the module is reloaded
+document.addEventListener('DOMContentLoaded', tryInitialize);
 
-    table.addEventListener('keydown', (e) => {
-        const rows = table.querySelectorAll('tbody tr');
-        const cells = rows[focusedCell.row]?.querySelectorAll('td');
-        
-        switch (e.key) {
-            case 'ArrowUp':
-                if (focusedCell.row > 0) focusedCell.row--;
-                break;
-            case 'ArrowDown':
-                if (focusedCell.row < rows.length - 1) focusedCell.row++;
-                break;
-            case 'ArrowLeft':
-                if (focusedCell.col > 0) focusedCell.col--;
-                break;
-            case 'ArrowRight':
-                if (cells && focusedCell.col < cells.length - 1) focusedCell.col++;
-                break;
-        }
-
-        const targetCell = rows[focusedCell.row]?.querySelectorAll('td')[focusedCell.col];
-        if (targetCell) {
-            targetCell.focus();
-            e.preventDefault();
+// Also initialize when the inventory section becomes active
+const observer = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+        if (mutation.target.classList.contains('active') && mutation.target.id === 'inventory' && !initialized) {
+            renderAttempts = 0;
+            tryInitialize();
         }
     });
-}
+});
 
-// Add live region for inventory updates
-function addLiveRegion() {
-    if (!document.getElementById('inventoryUpdateRegion')) {
-        const liveRegion = document.createElement('div');
-        liveRegion.id = 'inventoryUpdateRegion';
-        liveRegion.setAttribute('aria-live', 'polite');
-        liveRegion.setAttribute('role', 'status');
-        liveRegion.style.position = 'absolute';
-        liveRegion.style.clip = 'rect(0 0 0 0)';
-        document.body.appendChild(liveRegion);
+// Start observing the inventory section for visibility changes
+document.addEventListener('DOMContentLoaded', () => {
+    const inventorySection = document.getElementById('inventory');
+    if (inventorySection) {
+        observer.observe(inventorySection, { 
+            attributes: true,
+            attributeFilter: ['class']
+        });
     }
-}
+});
 
+// Make functions available globally
+window.addProduct = addProduct;
+window.removeItem = removeItem;
+window.searchInventory = searchInventory;
+window.openEditProductPopup = openEditProductPopup;
+
+// Export functions for use in other modules
 export { 
     inventoryData,
+    renderInventoryTable,
+    saveInventoryData,
+    updateInventoryData,
     addProduct,
     removeItem,
-    renderInventoryTable,
-    makeInventoryEditable,
     searchInventory,
     openEditProductPopup,
-    saveProduct,
-    initializeTableKeyboardNav
+    initializeInventoryData
 };

@@ -4,66 +4,106 @@
     <meta charset="UTF-8">
 </head>
 <body>
-<div id="inventory" class="dashboard-section">
-    <h2 class="mb-4">Inventory Dashboard</h2>
-    <div class="row g-4">
-        <div class="col-lg-4">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <h3 class="h5 mb-3">Add New Product</h3>
-                    <form class="add-product-form">
-                        <div class="mb-3">
-                            <label for="productName" class="form-label">Product Name</label>
-                            <input type="text" id="productName" class="form-control" placeholder="Enter product name" accesskey="n" title="Product Name (Alt+N)" aria-label="Product Name">
-                        </div>
-                        <div class="mb-3">
-                            <label for="productVariant" class="form-label">Variant</label>
-                            <input type="text" id="productVariant" class="form-control" placeholder="Enter variant" accesskey="v" title="Product Variant (Alt+V)" aria-label="Product Variant">
-                        </div>
-                        <div class="mb-3">
-                            <label for="productCostPrice" class="form-label">Cost Price</label>
-                            <input type="number" id="productCostPrice" class="form-control" placeholder="Enter cost price" step="0.01" accesskey="c" title="Cost Price (Alt+C)" aria-label="Cost Price">
-                        </div>
-                        <div class="mb-3">
-                            <label for="productPrice" class="form-label">Price</label>
-                            <input type="number" id="productPrice" class="form-control" placeholder="Enter price" step="0.01" accesskey="p" title="Price (Alt+P)" aria-label="Price">
-                        </div>
-                        <div class="mb-3">
-                            <label for="productQuantity" class="form-label">Quantity</label>
-                            <input type="number" id="productQuantity" class="form-control" placeholder="Enter quantity" accesskey="q" title="Quantity (Alt+Q)" aria-label="Quantity">
-                        </div>
-                        <button type="button" class="btn btn-success w-100" onclick="addProduct()" accesskey="a" title="Add Product (Alt+A)" aria-label="Add Product">
-                            Add Product
-                        </button>
-                    </form>
+<div id="inventory" class="dashboard-section active">
+    <div class="container-fluid">
+        <div class="row g-4">
+            <!-- Add Product Form Column -->
+            <div class="col-md-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white border-bottom">
+                        <h3 class="h5 mb-0">Add New Product</h3>
+                    </div>
+                    <div class="card-body">
+                        <form class="add-product-form" id="addProductForm" onsubmit="return false;">
+                            <div class="mb-3">
+                                <label for="productName" class="form-label fw-medium">Product Name</label>
+                                <input type="text" id="productName" class="form-control" placeholder="Enter product name" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="productVariant" class="form-label fw-medium">Variant</label>
+                                <input type="text" id="productVariant" class="form-control" placeholder="Enter variant">
+                            </div>
+                            <div class="mb-3">
+                                <label for="productCostPrice" class="form-label fw-medium">Cost Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" id="productCostPrice" class="form-control" placeholder="0.00" step="0.01" min="0" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label for="productPrice" class="form-label fw-medium">Price</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" id="productPrice" class="form-control" placeholder="0.00" step="0.01" min="0" required>
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <label for="productQuantity" class="form-label fw-medium">Quantity</label>
+                                <input type="number" id="productQuantity" class="form-control" placeholder="Enter quantity" min="0" required>
+                            </div>
+                            <button type="button" class="btn btn-success w-100" onclick="addProduct()">Add Product</button>
+                        </form>
+                    </div>
                 </div>
             </div>
-        </div>
-        <div class="col-lg-8">
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="mb-3">
-                        <input type="text" id="searchInventory" class="form-control" placeholder="Search inventory..." onkeyup="searchInventory()" accesskey="f" title="Search Inventory (Alt+F)" aria-label="Search Inventory">
+
+            <!-- Inventory Table Column -->
+            <div class="col-md-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-white border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h3 class="h5 mb-0">Current Inventory</h3>
+                            <div class="col-md-6">
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white border-end-0">
+                                        <i class="bi bi-search text-muted"></i>
+                                    </span>
+                                    <input type="text" id="searchInventory" class="form-control border-start-0 ps-0" 
+                                           placeholder="Search inventory..." 
+                                           onkeyup="searchInventory()">
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="table-responsive">
-                        <table id="inventoryTable" class="table table-hover" role="grid" aria-label="Inventory Table">
-                            <thead class="table-light">
-                                <tr>
-                                    <th>Product</th>
-                                    <th>Variant</th>
-                                    <th>Cost Price</th>
-                                    <th>Price</th>
-                                    <th>Quantity</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table id="inventoryTable" class="table table-hover align-middle mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="px-3 py-3">ID</th>
+                                        <th class="px-3 py-3">Product</th>
+                                        <th class="py-3">Variant</th>
+                                        <th class="py-3 text-end">Cost Price</th>
+                                        <th class="py-3 text-end">Price</th>
+                                        <th class="py-3 text-center">Quantity</th>
+                                        <th class="px-3 py-3 text-end">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inventoryTableBody"></tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script type="text/javascript">
+    // Initialize form handling when the document is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.getElementById('addProductForm');
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                if (typeof window.addProduct === 'function') {
+                    window.addProduct();
+                } else {
+                    console.error('addProduct function not found');
+                }
+            });
+        }
+    });
+</script>
 </body>
 </html>
