@@ -1,163 +1,92 @@
-import { inventoryData } from './inventory.js';
+import * as db from './database/index.js';
 
 let cartItems = [];
 let salesData = [];
 
-function initializeSalesData() {
+async function initializeSalesData() {
     try {
-        const storedData = localStorage.getItem('salesData');
+        // Get today's sales
+        const today = new Date();
+        const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
         
-        // Clear existing sales data first
-        salesData.length = 0;
-        
-        if (storedData) {
-            const parsedData = JSON.parse(storedData);
-            
-            // Convert dates back to Date objects
-            salesData.push(...parsedData.map(sale => ({
-                ...sale,
-                date: new Date(sale.date)
-            })));
-        }
-        
-        // Sort sales data by date
-        salesData.sort((a, b) => a.date - b.date);
+        salesData = await db.getSales(startOfDay, endOfDay);
     } catch (error) {
         console.error('Error initializing sales data:', error);
         salesData = [];
     }
 }
 
-function saveSalesData() {
-    try {
-        // Save sales data with refund information
-        const dataToSave = salesData.map(sale => ({
-            ...sale,
-            date: sale.date.toISOString(),
-            refunded: sale.refunded || false,
-            refundDate: sale.refundDate || null
-        }));
-        
-        localStorage.setItem('salesData', JSON.stringify(dataToSave));
-    } catch (error) {
-        console.error('Error saving sales data:', error);
-    }
-}
-
-function initializeTableKeyboardNav() {
-    ['salesInventoryTable', 'cartTable'].forEach(tableId => {
-        const table = document.getElementById(tableId);
-        if (!table) return;
-
-        let focusedCell = { row: 0, col: 0 };
-        
-        table.addEventListener('keydown', (e) => {
-            const rows = table.querySelectorAll('tbody tr');
-            const cells = rows[focusedCell.row]?.querySelectorAll('td');
-            
-            switch (e.key) {
-                case 'ArrowUp':
-                    if (focusedCell.row > 0) focusedCell.row--;
-                    break;
-                case 'ArrowDown':
-                    if (focusedCell.row < rows.length - 1) focusedCell.row++;
-                    break;
-                case 'ArrowLeft':
-                    if (focusedCell.col > 0) focusedCell.col--;
-                    break;
-                case 'ArrowRight':
-                    if (cells && focusedCell.col < cells.length - 1) focusedCell.col++;
-                    break;
-                case 'Enter':
-                case ' ':
-                    const actionButton = cells?.[focusedCell.col]?.querySelector('button');
-                    if (actionButton) {
-                        actionButton.click();
-                        e.preventDefault();
-                    }
-                    break;
-            }
-
-            const targetCell = rows[focusedCell.row]?.querySelectorAll('td')[focusedCell.col];
-            if (targetCell) {
-                targetCell.focus();
-                e.preventDefault();
-            }
-        });
-    });
-}
-
-function updateLiveRegion(message) {
-    const liveRegion = document.getElementById('salesUpdateRegion') || createLiveRegion();
-    liveRegion.textContent = message;
-}
-
-function createLiveRegion() {
-    const region = document.createElement('div');
-    region.id = 'salesUpdateRegion';
-    region.setAttribute('aria-live', 'polite');
-    region.setAttribute('role', 'status');
-    region.style.position = 'absolute';
-    region.style.clip = 'rect(0 0 0 0)';
-    document.body.appendChild(region);
-    return region;
-}
-
-function renderSalesInventory() {
+async function renderSalesInventory() {
     const tableBody = document.querySelector('#salesInventoryTable tbody');
     if (!tableBody) return;
     
     tableBody.innerHTML = '';
     
-    if (!inventoryData || inventoryData.length === 0) {
-        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No items available</td></tr>';
-        return;
-    }
-    
-    inventoryData.forEach((item, index) => {
-        if (item.quantity > 0) {  // Only show items with available quantity
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.name} ${item.variant ? `(${item.variant})` : ''}<br>
-                    <small class="text-muted">ID: ${item.id || '-'}</small>
-                </td>
-                <td>$${item.price.toFixed(2)}</td>
-                <td>${item.quantity}</td>
-                <td>
-                    <input type="number" class="form-control form-control-sm w-75" 
-                        id="qty-${index}" value="1" min="1" max="${item.quantity}">
-                </td>
-                <td>
-                    <button class="btn btn-success btn-sm" onclick="addToCart(${index})">
-                        Add to Cart
-                    </button>
-                </td>
-            `;
-            tableBody.appendChild(row);
+    try {
+        const inventoryData = await db.getProducts();
+        
+        if (!inventoryData || inventoryData.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-4">No items available</td></tr>';
+            return;
         }
-    });
+        
+        inventoryData.forEach((item, index) => {
+            if (item.quantity > 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${item.name} ${item.variant ? `(${item.variant})` : ''}<br>
+                        <small class="text-muted">ID: ${item.id || '-'}</small>
+                    </td>
+                    <td>$${item.price.toFixed(2)}</td>
+                    <td>${item.quantity}</td>
+                    <td>
+                        <input type="number" class="form-control form-control-sm w-75" 
+                            id="qty-${item.id}" value="1" min="1" max="${item.quantity}">
+                    </td>
+                    <td>
+                        <button class="btn btn-success btn-sm" onclick="addToCart('${item.id}')">
+                            Add to Cart
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            }
+        });
+    } catch (error) {
+        console.error('Error rendering sales inventory:', error);
+        tableBody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading inventory</td></tr>';
+    }
 }
 
-function addToCart(index) {
-    const qtyInput = document.getElementById(`qty-${index}`);
-    const quantity = parseInt(qtyInput.value);
-    
-    if (quantity > 0 && quantity <= inventoryData[index].quantity) {
-        const existingItem = cartItems.find(item => item.id === inventoryData[index].id);
+async function addToCart(productId) {
+    try {
+        const qtyInput = document.getElementById(`qty-${productId}`);
+        const quantity = parseInt(qtyInput.value);
         
-        if (existingItem) {
-            existingItem.quantity += quantity;
-        } else {
-            cartItems.push({
-                id: inventoryData[index].id,
-                index: index,
-                name: inventoryData[index].name,
-                price: inventoryData[index].price,
-                quantity: quantity
-            });
+        const product = await db.getProducts().then(products => 
+            products.find(p => p.id === productId)
+        );
+        
+        if (product && quantity > 0 && quantity <= product.quantity) {
+            const existingItem = cartItems.find(item => item.id === productId);
+            
+            if (existingItem) {
+                existingItem.quantity += quantity;
+            } else {
+                cartItems.push({
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: quantity
+                });
+            }
+            
+            renderCart();
         }
-        
-        renderCart();
+    } catch (error) {
+        console.error('Error adding to cart:', error);
+        showNotification('Error adding item to cart', 'error');
     }
 }
 
@@ -198,61 +127,55 @@ function removeFromCart(index) {
     renderCart();
 }
 
-function finalizeSale() {
+async function finalizeSale() {
     if (cartItems.length === 0) {
-        updateLiveRegion('Cart is empty');
+        showNotification('Cart is empty', 'error');
         return;
     }
     
-    // Create sale date in UTC, preserving the current time
-    const now = new Date();
-    const saleDate = new Date(Date.UTC(
-        now.getFullYear(),
-        now.getMonth(),
-        now.getDate(),
-        now.getHours(),
-        now.getMinutes(),
-        now.getSeconds()
-    ));
-    
-    const saleItems = cartItems.map(item => ({
-        name: item.name,
-        price: item.price,
-        quantity: item.quantity,
-        total: item.price * item.quantity
-    }));
-    const totalAmount = saleItems.reduce((sum, item) => sum + item.total, 0);
-    
-    // Create new sale with UTC date
-    const newSale = {
-        date: saleDate,
-        items: saleItems,
-        total: totalAmount
-    };
-    
-    // Add to sales data
-    salesData.push(newSale);
-    
-    // Save to localStorage
-    saveSalesData();
-    
-    generateReceipt(saleDate, saleItems, totalAmount);
-    updateLiveRegion(`Sale finalized. Total amount: $${totalAmount.toFixed(2)}`);
-    
-    // Update inventory
-    cartItems.forEach(item => {
-        if (inventoryData[item.index]) {
-            inventoryData[item.index].quantity -= item.quantity;
-        }
-    });
-    
-    // Clear cart and refresh displays
-    cartItems = [];
-    renderCart();
-    renderSalesInventory();
+    try {
+        const totalAmount = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        // Create the sale in database
+        const sale = await db.createSale({
+            date: new Date(),
+            total: totalAmount
+        }, cartItems);
+        
+        generateReceipt(sale.date, cartItems, totalAmount);
+        showNotification(`Sale finalized. Total amount: $${totalAmount.toFixed(2)}`, 'success');
+        
+        // Clear cart and refresh displays
+        cartItems = [];
+        renderCart();
+        renderSalesInventory();
+        
+    } catch (error) {
+        console.error('Error finalizing sale:', error);
+        showNotification('Error finalizing sale', 'error');
+    }
 }
 
-function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, refundDate = null) {
+async function processRefund(saleId) {
+    try {
+        const success = await db.refundSale(saleId);
+        if (success) {
+            showNotification('Refund processed successfully', 'success');
+            // Refresh the view
+            await initializeSalesData();
+            return true;
+        } else {
+            showNotification('Unable to process refund', 'error');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error processing refund:', error);
+        showNotification('Error processing refund', 'error');
+        return false;
+    }
+}
+
+function generateReceipt(saleDate, items, totalAmount, isRefunded = false, refundDate = null) {
     const receiptContent = document.getElementById('receiptContent');
     if (!receiptContent) return;
 
@@ -276,7 +199,7 @@ function generateReceipt(saleDate, saleItems, totalAmount, isRefunded = false, r
                 <tbody>
     `;
     
-    saleItems.forEach(item => {
+    items.forEach(item => {
         receiptHTML += `
             <tr>
                 <td>${item.name}</td>
@@ -365,113 +288,55 @@ function printReceipt() {
     printWindow.document.close();
 }
 
-function processRefund(saleDate, saleIndex) {
-    // Find the sale in the salesData array
-    const saleToRefund = salesData.find(sale => {
-        const currentSaleDate = new Date(sale.date);
-        return isDateEqual(new Date(saleDate), currentSaleDate) && !sale.refunded;
-    });
+function initializeTableKeyboardNav() {
+    ['salesInventoryTable', 'cartTable'].forEach(tableId => {
+        const table = document.getElementById(tableId);
+        if (!table) return;
 
-    if (saleToRefund) {
-        // Mark the sale as refunded
-        saleToRefund.refunded = true;
-        saleToRefund.refundDate = new Date().toISOString();
-
-        // Return items to inventory
-        saleToRefund.items.forEach(item => {
-            const inventoryItem = inventoryData.find(invItem => invItem.name === item.name);
-            if (inventoryItem) {
-                inventoryItem.quantity += item.quantity;
-            }
-        });
-
-        // Save updated data
-        saveSalesData();
-        localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
-
-        // Update the UI
-        const salesList = document.getElementById('dailySalesList');
-        if (salesList) {
-            const saleElements = salesList.getElementsByClassName('sale-item');
-            if (saleElements[saleIndex]) {
-                saleElements[saleIndex].classList.add('refunded-sale');
-                const refundButton = saleElements[saleIndex].querySelector('.refund-button');
-                if (refundButton) {
-                    refundButton.remove();
-                }
-                const saleHeader = saleElements[saleIndex].querySelector('.sale-header');
-                if (saleHeader) {
-                    saleHeader.innerHTML += '<span class="refunded-tag">Refunded</span>';
-                }
-
-                // Update daily total by subtracting the refunded amount
-                const dailyTotalDiv = salesList.querySelector('.daily-total h4');
-                if (dailyTotalDiv) {
-                    const currentTotal = parseFloat(dailyTotalDiv.textContent.replace(/[^0-9.-]+/g, ""));
-                    const newTotal = currentTotal - saleToRefund.total;
-                    dailyTotalDiv.textContent = `Daily Total: $${newTotal.toFixed(2)}`;
-                }
-            }
-        }
-
-        // Update monthly total
-        const monthlyTotalElement = document.getElementById('monthlyTotal');
-        if (monthlyTotalElement) {
-            const currentMonthlyTotal = parseFloat(monthlyTotalElement.textContent.replace(/[^0-9.-]+/g, ""));
-            const newMonthlyTotal = currentMonthlyTotal - saleToRefund.total;
-            monthlyTotalElement.textContent = `$${newMonthlyTotal.toFixed(2)}`;
-        }
-
-        // Show notification
-        const notification = document.createElement('div');
-        notification.className = 'notification success show';
-        notification.textContent = 'Refund processed successfully';
-        document.body.appendChild(notification);
-        setTimeout(() => notification.remove(), 3000);
-
-        return true;
-    }
-    return false;
-}
-
-// Helper function to check if two dates are equal (ignoring time)
-function isDateEqual(date1, date2) {
-    if (!date1 || !date2) return false;
-    return date1.getUTCFullYear() === date2.getUTCFullYear() &&
-           date1.getUTCMonth() === date2.getUTCMonth() &&
-           date1.getUTCDate() === date2.getUTCDate();
-}
-
-// Make processRefund available globally
-window.processRefund = processRefund;
-
-// Update initialization code at the beginning of the file
-document.addEventListener('DOMContentLoaded', () => {
-    initializeSalesData();
-    const saleSection = document.getElementById('sale');
-    
-    // Create an observer to watch for when the sales section becomes active
-    const observer = new MutationObserver((mutations) => {
-        mutations.forEach((mutation) => {
-            if (mutation.target.classList.contains('active')) {
-                renderSalesInventory();
-            }
-        });
-    });
-
-    // Start observing the sales section
-    if (saleSection) {
-        observer.observe(saleSection, { 
-            attributes: true,
-            attributeFilter: ['class']
-        });
+        let focusedCell = { row: 0, col: 0 };
         
-        // Initial render if the section is already active
-        if (saleSection.classList.contains('active')) {
-            renderSalesInventory();
-        }
-    }
-});
+        table.addEventListener('keydown', (e) => {
+            const rows = table.querySelectorAll('tbody tr');
+            const cells = rows[focusedCell.row]?.querySelectorAll('td');
+            
+            switch (e.key) {
+                case 'ArrowUp':
+                    if (focusedCell.row > 0) focusedCell.row--;
+                    break;
+                case 'ArrowDown':
+                    if (focusedCell.row < rows.length - 1) focusedCell.row++;
+                    break;
+                case 'ArrowLeft':
+                    if (focusedCell.col > 0) focusedCell.col--;
+                    break;
+                case 'ArrowRight':
+                    if (cells && focusedCell.col < cells.length - 1) focusedCell.col++;
+                    break;
+                case 'Enter':
+                case ' ':
+                    const actionButton = cells?.[focusedCell.col]?.querySelector('button');
+                    if (actionButton) {
+                        actionButton.click();
+                        e.preventDefault();
+                    }
+                    break;
+            }
+
+            const targetCell = rows[focusedCell.row]?.querySelectorAll('td')[focusedCell.col];
+            if (targetCell) {
+                targetCell.focus();
+                e.preventDefault();
+            }
+        });
+    });
+}
+
+// Make necessary functions available globally
+window.addToCart = addToCart;
+window.removeFromCart = removeFromCart;
+window.finalizeSale = finalizeSale;
+window.printReceipt = printReceipt;
+window.processRefund = processRefund;
 
 export { 
     salesData,

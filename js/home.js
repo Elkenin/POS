@@ -1,5 +1,4 @@
-import { salesData, initializeSalesData, processRefund } from './sales.js';
-import { inventoryData } from './inventory.js';
+import * as db from './database/index.js';
 
 // Initialize dates in UTC
 let calendarDate = new Date(Date.UTC(2025, 3, 1)); // April 1, 2025 UTC
@@ -30,54 +29,49 @@ function getWeekNumber(date) {
     return Math.ceil((d.getUTCDate() + firstDayOfMonth.getUTCDay()) / 7);
 }
 
-function calculateMonthlyTotals() {
-    let total = 0;
-    let revenue = 0;
+async function calculateMonthlyTotals() {
+    const year = calendarDate.getUTCFullYear();
+    const month = calendarDate.getUTCMonth();
     
-    salesData.forEach(sale => {
-        if (sale.date.getUTCMonth() === calendarDate.getUTCMonth() && 
-            sale.date.getUTCFullYear() === calendarDate.getUTCFullYear() &&
-            !sale.refunded) {
-            total += sale.total;
-            sale.items.forEach(item => {
-                const inventoryItem = inventoryData.find(invItem => 
-                    invItem.name === item.name.split(' (')[0]
-                );
-                if (inventoryItem) {
-                    revenue += (item.price - inventoryItem.costPrice) * item.quantity;
-                }
-            });
-        }
-    });
-    
-    return { total, revenue };
+    return await db.getMonthlyStats(year, month);
 }
 
 // Calculate weekly sales totals
-function calculateWeeklySales() {
+async function calculateWeeklySales() {
     const weeklySales = new Map();
+    const startOfMonth = new Date(Date.UTC(
+        calendarDate.getUTCFullYear(),
+        calendarDate.getUTCMonth(),
+        1
+    ));
+    const endOfMonth = new Date(Date.UTC(
+        calendarDate.getUTCFullYear(),
+        calendarDate.getUTCMonth() + 1,
+        0,
+        23, 59, 59
+    ));
+
+    const sales = await db.getSales(startOfMonth, endOfMonth);
     
-    salesData.forEach(sale => {
-        const saleDate = new Date(sale.date);
-        if (saleDate.getUTCMonth() === calendarDate.getUTCMonth() && 
-            saleDate.getUTCFullYear() === calendarDate.getUTCFullYear()) {
-            const weekNum = getWeekNumber(saleDate);
+    sales.forEach(sale => {
+        if (!sale.refunded) {
+            const weekNum = getWeekNumber(sale.date);
             const currentTotal = weeklySales.get(weekNum) || 0;
-            weeklySales.set(weekNum, currentTotal + sale.total);
+            weeklySales.set(weekNum, currentTotal + Number(sale.total));
         }
     });
     
     return weeklySales;
 }
 
-function renderWeeklySales() {
+async function renderWeeklySales() {
     const weeklySalesTable = document.getElementById('weeklySalesTable');
     if (!weeklySalesTable) return;
     
     const tbody = weeklySalesTable.querySelector('tbody');
     tbody.innerHTML = '';
     
-    const weeklySales = calculateWeeklySales();
+    const weeklySales = await calculateWeeklySales();
     const sortedWeeks = Array.from(weeklySales.keys()).sort((a, b) => a - b);
     
     sortedWeeks.forEach(weekNum => {
@@ -91,42 +85,53 @@ function renderWeeklySales() {
     });
 
     // Update monthly total
+    const { totalSales } = await calculateMonthlyTotals();
     const monthlyTotal = document.getElementById('monthlyTotal');
     if (monthlyTotal) {
-        monthlyTotal.textContent = `$${calculateMonthlyTotal().toFixed(2)}`;
+        monthlyTotal.textContent = `$${totalSales.toFixed(2)}`;
     }
 }
 
-function updateSalesView() {
+async function updateSalesView() {
     const viewOption = document.getElementById('salesViewOption').value;
     const salesDetailsList = document.getElementById('salesDetailsList');
     if (!salesDetailsList) return;
 
-    let filteredSales = salesData.filter(sale => {
-        const saleDate = new Date(sale.date);
-        switch (viewOption) {
-            case 'day':
-                return isDateEqual(saleDate, selectedDate);
-            case 'week':
-                return getWeekNumber(saleDate) === getWeekNumber(selectedDate) &&
-                       saleDate.getMonth() === selectedDate.getUTCMonth() &&
-                       saleDate.getFullYear() === selectedDate.getUTCFullYear();
-            case 'month':
-                return saleDate.getMonth() === selectedDate.getUTCMonth() &&
-                       saleDate.getFullYear() === selectedDate.getUTCFullYear();
-            default:
-                return false;
-        }
-    });
+    let startDate, endDate;
+    switch (viewOption) {
+        case 'day':
+            startDate = normalizeDate(selectedDate);
+            endDate = new Date(startDate);
+            endDate.setUTCHours(23, 59, 59, 999);
+            break;
+        case 'week':
+            const weekNum = getWeekNumber(selectedDate);
+            startDate = new Date(selectedDate);
+            startDate.setUTCDate(startDate.getUTCDate() - startDate.getUTCDay());
+            endDate = new Date(startDate);
+            endDate.setUTCDate(endDate.getUTCDate() + 6);
+            endDate.setUTCHours(23, 59, 59, 999);
+            break;
+        case 'month':
+            startDate = new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth(), 1));
+            endDate = new Date(Date.UTC(selectedDate.getUTCFullYear(), selectedDate.getUTCMonth() + 1, 0, 23, 59, 59));
+            break;
+        default:
+            return;
+    }
 
+    const sales = await db.getSales(startDate, endDate);
     salesDetailsList.innerHTML = '';
-    filteredSales.forEach(sale => {
+    
+    sales.forEach(sale => {
         const saleDiv = document.createElement('div');
         saleDiv.className = 'sale-item';
         saleDiv.innerHTML = `
             <div class="item-name">Sale on ${new Date(sale.date).toLocaleDateString()}</div>
             <div class="item-details">
-                ${sale.items.map(item => `${item.name} (${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}`).join('<br>')}
+                ${sale.items.map(item => 
+                    `${item.Product.name} (${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}`
+                ).join('<br>')}
                 <div class="total">Total: $${sale.total.toFixed(2)}</div>
             </div>
         `;
@@ -134,42 +139,30 @@ function updateSalesView() {
     });
 }
 
-function getSalesForDay(date) {
-    return salesData.filter(sale => isDateEqual(sale.date, date));
-}
-
-function getSalesForWeek(date) {
-    // Always reload sales data before filtering
-    initializeSalesData();
+async function getSalesForDay(date) {
+    const startOfDay = normalizeDate(date);
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setUTCHours(23, 59, 59, 999);
     
-    const weekNum = getWeekNumber(date);
-    return salesData.filter(sale => {
-        const saleDate = new Date(sale.date);
-        return getWeekNumber(saleDate) === weekNum &&
-               saleDate.getMonth() === date.getUTCMonth() &&
-               saleDate.getFullYear() === date.getUTCFullYear();
-    });
+    return await db.getSales(startOfDay, endOfDay);
 }
 
-function renderDateDetails(date) {
-    // Get sales for the selected day - no need to reload data since it's already loaded
-    const dailySales = salesData.filter(sale => isDateEqual(sale.date, date));
-
-    // Render daily sales
+async function renderDateDetails(date) {
+    const dailySales = await getSalesForDay(date);
     const dailySalesList = document.getElementById('dailySalesList');
+    
     if (dailySalesList) {
         dailySalesList.innerHTML = '';
         
         if (dailySales && dailySales.length > 0) {
-            dailySales.forEach((sale, index) => {
+            dailySales.forEach((sale) => {
                 const saleDiv = document.createElement('div');
                 saleDiv.className = `sale-item${sale.refunded ? ' refunded-sale' : ''}`;
-                const localSaleDate = new Date(sale.date);
                 
                 const itemsList = sale.items.map(item => {
                     return `
                         <div class="item-row">
-                            <span class="item-name">${item.name}</span>
+                            <span class="item-name">${item.Product.name}</span>
                             <span class="item-details">
                                 ${item.quantity} × $${item.price.toFixed(2)} = $${(item.price * item.quantity).toFixed(2)}
                             </span>
@@ -179,9 +172,9 @@ function renderDateDetails(date) {
                 
                 saleDiv.innerHTML = `
                     <div class="sale-header">
-                        Sale at ${localSaleDate.toLocaleTimeString()}
+                        Sale at ${new Date(sale.date).toLocaleTimeString()}
                         ${sale.refunded ? '<span class="refunded-tag">Refunded</span>' : 
-                          `<button class="refund-button" onclick="handleRefund('${sale.date}', ${index})">Refund</button>`}
+                          `<button class="refund-button" onclick="handleRefund('${sale.id}')">Refund</button>`}
                     </div>
                     <div class="items-list">
                         ${itemsList}
@@ -197,17 +190,17 @@ function renderDateDetails(date) {
         }
     }
 
-    // Update statistics after rendering details
-    updateStatisticsDisplays(date);
+    // Update statistics
+    await updateStatisticsDisplays(date);
 }
 
-// Add handler for refund button clicks
-function handleRefund(saleDate, saleIndex) {
+async function handleRefund(saleId) {
     const confirmed = window.confirm('Are you sure you want to process this refund?');
     if (confirmed) {
-        if (processRefund(saleDate, saleIndex)) {
+        if (await db.refundSale(saleId)) {
             // Refresh the calendar view to update totals
-            renderCalendar();
+            await renderCalendar();
+            await renderDateDetails(selectedDate);
         }
     }
 }
@@ -215,13 +208,7 @@ function handleRefund(saleDate, saleIndex) {
 // Make handleRefund available globally
 window.handleRefund = handleRefund;
 
-function createDateWithSameTime(fromDate, withDate) {
-    // Create new date in UTC
-    return normalizeDate(withDate);
-}
-
-function updateStatisticsDisplays(date) {
-    // Check if the required elements exist first
+async function updateStatisticsDisplays(date) {
     const elements = {
         dailyTotal: document.getElementById('dailyTotalDisplay'),
         dailyItems: document.getElementById('dailyItemCountDisplay'),
@@ -230,52 +217,34 @@ function updateStatisticsDisplays(date) {
         monthlyRevenue: document.getElementById('monthlyRevenueDisplay')
     };
     
-    // If any of the required elements are missing, return early
     if (!Object.values(elements).every(el => el)) {
         console.log('Statistics elements not ready yet');
         return;
     }
     
-    const salesForDay = getSalesForDay(date);
-    let dailyTotal = 0;
-    let dailyRevenue = 0;
-    let itemCount = 0;
-
-    // Calculate daily statistics
-    salesForDay.forEach(sale => {
-        if (!sale.refunded) {
-            dailyTotal += sale.total;
-            sale.items.forEach(item => {
-                itemCount += item.quantity;
-                const inventoryItem = inventoryData.find(invItem => 
-                    invItem.name === item.name.split(' (')[0]
-                );
-                if (inventoryItem) {
-                    dailyRevenue += (item.price - inventoryItem.costPrice) * item.quantity;
-                }
-            });
-        }
-    });
-
-    // Calculate monthly statistics
-    const { total: monthlyTotal, revenue: monthlyRevenue } = calculateMonthlyTotals();
-
+    // Get daily statistics
+    const dailyStats = await db.getDailyStats(date);
+    
+    // Get monthly statistics
+    const monthlyStats = await db.getMonthlyStats(
+        date.getUTCFullYear(),
+        date.getUTCMonth()
+    );
+    
     // Update all displays
-    elements.dailyTotal.textContent = `$${dailyTotal.toFixed(2)}`;
-    elements.dailyItems.textContent = itemCount;
-    elements.dailyRevenue.textContent = `$${dailyRevenue.toFixed(2)}`;
-    elements.monthlyTotal.textContent = `$${monthlyTotal.toFixed(2)}`;
-    elements.monthlyRevenue.textContent = `$${monthlyRevenue.toFixed(2)}`;
+    elements.dailyTotal.textContent = `$${dailyStats.totalSales.toFixed(2)}`;
+    elements.dailyItems.textContent = dailyStats.itemCount;
+    elements.dailyRevenue.textContent = `$${dailyStats.revenue.toFixed(2)}`;
+    elements.monthlyTotal.textContent = `$${monthlyStats.totalSales.toFixed(2)}`;
+    elements.monthlyRevenue.textContent = `$${monthlyStats.revenue.toFixed(2)}`;
 }
 
-export function renderCalendar() {
+export async function renderCalendar() {
     console.log('Rendering calendar for:', calendarDate.toISOString());
     updateCalendarHeader();
     
-    // Reset calendar table header first
     const calendarTable = document.querySelector('#salesCalendar');
     const headerRow = calendarTable.querySelector('thead tr');
-    // Clear any existing headers first
     headerRow.innerHTML = `
         <th scope="col">Sun</th>
         <th scope="col">Mon</th>
@@ -294,9 +263,6 @@ export function renderCalendar() {
     
     calendarBody.innerHTML = '';
     
-    // Force reload sales data to ensure we have the latest data
-    initializeSalesData();
-    
     // Create dates in UTC for the calendar range
     const firstDayOfMonth = new Date(Date.UTC(
         calendarDate.getUTCFullYear(),
@@ -310,104 +276,78 @@ export function renderCalendar() {
         0
     ));
 
+    // Get all sales for the month
+    const monthSales = await db.getSales(firstDayOfMonth, lastDayOfMonth);
+    
+    // Group sales by date
+    const salesByDate = new Map();
+    monthSales.forEach(sale => {
+        if (!sale.refunded) {
+            const saleDate = new Date(sale.date);
+            const dateKey = saleDate.toISOString().split('T')[0];
+            const currentTotal = salesByDate.get(dateKey) || 0;
+            salesByDate.set(dateKey, currentTotal + Number(sale.total));
+        }
+    });
+
     // Start from the first day of the week containing the first of the month
     let currentDay = new Date(firstDayOfMonth);
     currentDay.setUTCDate(currentDay.getUTCDate() - currentDay.getUTCDay());
 
-    // Render calendar grid
     while (currentDay <= lastDayOfMonth || currentDay.getUTCDay() !== 0) {
-        const row = document.createElement('tr');
-        row.setAttribute('role', 'row');
+        if (currentDay.getUTCDay() === 0) {
+            const row = document.createElement('tr');
+            row.setAttribute('role', 'row');
+            calendarBody.appendChild(row);
+        }
         
-        // Regular day cells
-        for (let i = 0; i < 7; i++) {
-            const cell = document.createElement('td');
-            cell.setAttribute('tabindex', '0');
-            cell.setAttribute('role', 'gridcell');
+        const cell = document.createElement('td');
+        cell.setAttribute('tabindex', '0');
+        cell.setAttribute('role', 'gridcell');
+        
+        const currentUTCDate = normalizeDate(currentDay);
+        const dateKey = currentUTCDate.toISOString().split('T')[0];
+        
+        cell.setAttribute('data-date', currentUTCDate.toISOString());
+        cell.setAttribute('aria-label', currentUTCDate.toDateString());
+        
+        if (currentDay.getUTCMonth() === calendarDate.getUTCMonth()) {
+            cell.textContent = currentDay.getUTCDate();
+            cell.classList.add('current-month');
             
-            const currentUTCDate = new Date(Date.UTC(
-                currentDay.getUTCFullYear(),
-                currentDay.getUTCMonth(),
-                currentDay.getUTCDate()
-            ));
-            
-            // Set data attributes for the cell
-            cell.setAttribute('data-date', currentUTCDate.toISOString());
-            cell.setAttribute('aria-label', currentUTCDate.toDateString());
-            
-            // Style cells from current month differently
-            if (currentDay.getUTCMonth() === calendarDate.getUTCMonth()) {
-                cell.textContent = currentDay.getUTCDate();
-                cell.classList.add('current-month');
-                
-                // Find all sales for this day
-                const salesForDay = salesData.filter(sale => {
-                    const saleDate = new Date(sale.date);
-                    return isDateEqual(saleDate, currentUTCDate);
-                });
-                
-                // Add sales information if there are any sales (excluding refunded ones)
-                if (salesForDay.length > 0) {
-                    const totalSales = salesForDay.reduce((sum, sale) => 
-                        sum + (sale.refunded ? 0 : sale.total), 0);
-                    if (totalSales > 0) {
-                        const salesInfo = document.createElement('div');
-                        salesInfo.className = 'sales-total';
-                        salesInfo.textContent = `$${totalSales.toFixed(2)}`;
-                        salesInfo.setAttribute('aria-label', `Sales total: $${totalSales.toFixed(2)}`);
-                        cell.appendChild(salesInfo);
-                    }
-                }
-                
-                // Highlight selected date
-                if (isDateEqual(currentUTCDate, selectedDate)) {
-                    cell.classList.add('selected');
-                    cell.setAttribute('aria-selected', 'true');
-                }
-            } else {
-                // Style cells from adjacent months
-                cell.classList.add('adjacent-month');
-                cell.textContent = currentDay.getUTCDate();
+            const dailyTotal = salesByDate.get(dateKey);
+            if (dailyTotal) {
+                const salesInfo = document.createElement('div');
+                salesInfo.className = 'sales-total';
+                salesInfo.textContent = `$${dailyTotal.toFixed(2)}`;
+                salesInfo.setAttribute('aria-label', `Sales total: $${dailyTotal.toFixed(2)}`);
+                cell.appendChild(salesInfo);
             }
-
-            // Add click handler
-            cell.addEventListener('click', () => handleDateClick(currentUTCDate, cell));
-            row.appendChild(cell);
             
-            // Move to next day
-            currentDay.setUTCDate(currentDay.getUTCDate() + 1);
+            if (isDateEqual(currentUTCDate, selectedDate)) {
+                cell.classList.add('selected');
+                cell.setAttribute('aria-selected', 'true');
+            }
+        } else {
+            cell.classList.add('adjacent-month');
+            cell.textContent = currentDay.getUTCDate();
         }
 
-        calendarBody.appendChild(row);
+        cell.addEventListener('click', () => handleDateClick(currentUTCDate, cell));
+        calendarBody.lastElementChild.appendChild(cell);
+        
+        currentDay.setUTCDate(currentDay.getUTCDate() + 1);
     }
-
-    // Update monthly total
-    updateMonthlyTotal();
 
     if (selectedDate) {
-        renderDateDetails(selectedDate);
-        updateStatisticsDisplays(selectedDate);
+        await renderDateDetails(selectedDate);
+        await updateStatisticsDisplays(selectedDate);
     }
 }
 
-// Separate function to update monthly total
-function updateMonthlyTotal() {
-    const { total, revenue } = calculateMonthlyTotals();
-    const monthlyTotal = document.getElementById('monthlyTotal');
-    const monthlyRevenue = document.getElementById('monthlyRevenue');
-    
-    if (monthlyTotal) {
-        monthlyTotal.textContent = `$${total.toFixed(2)}`;
-    }
-    if (monthlyRevenue) {
-        monthlyRevenue.textContent = `Revenue: $${revenue.toFixed(2)}`;
-    }
-}
-
-function handleDateClick(date, cell) {
+async function handleDateClick(date, cell) {
     console.log('Date clicked:', date.toISOString());
     
-    // Update selected state
     document.querySelectorAll('#salesCalendar td').forEach(td => {
         td.classList.remove('selected');
         td.removeAttribute('aria-selected');
@@ -416,19 +356,16 @@ function handleDateClick(date, cell) {
     cell.classList.add('selected');
     cell.setAttribute('aria-selected', 'true');
     
-    // Update selected date and render details
     selectedDate = date;
-    renderDateDetails(selectedDate);
-    updateStatisticsDisplays(selectedDate);
+    await renderDateDetails(selectedDate);
+    await updateStatisticsDisplays(selectedDate);
 }
 
-// Separate the updateCalendarHeader function and make it more robust
 function updateCalendarHeader() {
     const monthElement = document.getElementById('currentMonth');
     const yearElement = document.getElementById('currentYear');
     
     if (monthElement && yearElement) {
-        // Use UTC methods for consistent display
         const month = calendarDate.toLocaleString('default', { 
             month: 'long',
             timeZone: 'UTC'
@@ -443,15 +380,13 @@ function updateCalendarHeader() {
     }
 }
 
-export function navigateCalendar(direction) {
-    // Create a new UTC date to avoid mutating the existing one
+export async function navigateCalendar(direction) {
     calendarDate = new Date(Date.UTC(
         calendarDate.getUTCFullYear(),
         calendarDate.getUTCMonth() + direction,
         1
     ));
     
-    // Ensure selected date stays in sync with calendar navigation
     selectedDate = new Date(Date.UTC(
         calendarDate.getUTCFullYear(),
         calendarDate.getUTCMonth(),
@@ -461,9 +396,9 @@ export function navigateCalendar(direction) {
     console.log('Calendar navigated to:', calendarDate.toISOString());
     console.log('Selected date updated to:', selectedDate.toISOString());
     
-    renderCalendar();
+    await renderCalendar();
     updateCalendarHeader();
-    updateStatisticsDisplays(selectedDate);
+    await updateStatisticsDisplays(selectedDate);
 }
 
 export function initializeCalendarKeyboardNavigation() {

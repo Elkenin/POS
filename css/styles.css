@@ -268,10 +268,47 @@ input:focus-visible,
 
 /* Notifications */
 .toast-container {
-    position: fixed;
-    top: 20px;
-    right: 20px;
-    z-index: 2000; /* Higher than the overlay's z-index */
+    position: fixed !important;
+    top: 20px !important;
+    right: 20px !important;
+    z-index: 2000 !important;
+    min-width: 300px;
+}
+
+.toast {
+    background-color: rgba(255, 255, 255, 0.95) !important;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
+    margin-bottom: 0.5rem !important;
+    opacity: 1 !important;
+    display: block !important;
+}
+
+.toast.show {
+    opacity: 1 !important;
+    display: block !important;
+}
+
+.toast.bg-success {
+    background-color: #198754 !important;
+}
+
+.toast.bg-error, .toast.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.toast.bg-info {
+    background-color: #0dcaf0 !important;
+}
+
+.toast.bg-warning {
+    background-color: #ffc107 !important;
+    color: #000 !important;
+}
+
+.toast .toast-body {
+    padding: 0.75rem 1.25rem;
+    font-size: 0.875rem;
+    color: #fff;
 }
 
 /* Loading animation */

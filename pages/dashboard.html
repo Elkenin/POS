@@ -6,94 +6,27 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.4/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
-    <link rel="stylesheet" href="../css/styles.css">
-    <!-- XLSX Library with initialization check -->
-    <script>
-        window.XLSX_INITIALIZED = false;
-        function initXLSX() {
-            if (typeof XLSX !== 'undefined') {
-                window.XLSX_INITIALIZED = true;
-                console.log('XLSX initialized successfully');
-            }
-        }
-    </script>
-    <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js" onload="initXLSX()"></script>
-    <!-- Fallback XLSX -->
-    <script>
-        setTimeout(function() {
-            if (!window.XLSX_INITIALIZED) {
-                console.log('Primary XLSX failed, loading fallback...');
-                var script = document.createElement('script');
-                script.src = "https://cdn.sheetjs.com/xlsx-0.19.3/package/dist/xlsx.full.min.js";
-                script.onload = initXLSX;
-                document.head.appendChild(script);
-            }
-        }, 1000);
-    </script>
+    <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body class="vh-100">
-    <!-- Import Overlay -->
-    <div id="importOverlay" class="position-fixed top-0 start-0 w-100 h-100 bg-light" style="z-index: 1050;">
-        <div class="container h-100 d-flex align-items-center justify-content-center">
-            <div class="row justify-content-center">
-                <div class="col-md-8">
-                    <div class="card shadow">
-                        <div class="card-body text-center p-5">
-                            <h2 class="mb-4">Welcome to Sales Dashboard</h2>
-                            <p class="text-muted">To begin, please import your data or start with a new system.</p>
-                            <div class="row mt-4 g-4">
-                                <div class="col-md-6">
-                                    <div class="p-4 border rounded h-100">
-                                        <h3 class="text-success h5">Import Existing Data</h3>
-                                        <p class="text-muted">Upload your existing Excel file with sales and inventory data</p>
-                                        <input type="file" id="initialExcelFile" accept=".xlsx, .xls" class="d-none">
-                                        <label for="initialExcelFile" class="btn btn-success">
-                                            Upload Excel File
-                                        </label>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="p-4 border rounded h-100">
-                                        <h3 class="text-success h5">Start Fresh</h3>
-                                        <p class="text-muted">Begin with a new empty system</p>
-                                        <button id="startFreshButton" class="btn btn-success">Start New System</button>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Main Content -->
-    <div id="mainContent" class="d-none">
+    <div id="mainContent">
         <!-- Navbar -->
         <nav class="navbar navbar-expand-lg navbar-light bg-light border-bottom fixed-top">
             <div class="container-fluid">
                 <div class="navbar-nav me-auto">
                     <a href="#" data-section="home" class="nav-link active d-flex align-items-center gap-2" title="Home Dashboard">
-                        <img src="../assets/icons/dashboard-icon.gif" alt="Home" width="20" height="20">
+                        <img src="/assets/icons/dashboard-icon.gif" alt="Home" width="20" height="20">
                         Home
                     </a>
                     <a href="#" data-section="sales" class="nav-link d-flex align-items-center gap-2" title="Sales Management">
-                        <img src="../assets/icons/shop-icon.gif" alt="Sale" width="20" height="20">
+                        <img src="/assets/icons/shop-icon.gif" alt="Sale" width="20" height="20">
                         Sales
                     </a>
                     <a href="#" data-section="inventory" class="nav-link d-flex align-items-center gap-2" title="Inventory Management">
-                        <img src="../assets/icons/inventory-icon.gif" alt="Inventory" width="20" height="20">
+                        <img src="/assets/icons/inventory-icon.gif" alt="Inventory" width="20" height="20">
                         Inventory
                     </a>
-                </div>
-                <div class="d-flex gap-3 align-items-center">
-                    <button type="button" class="btn btn-warning" id="exportButton">
-                        <img src="../assets/icons/download-icon.png" alt="Export" width="20" height="20">
-                    </button>
-                    <input type="file" id="excelFile" accept=".xlsx, .xls" class="d-none">
-                    <label for="excelFile" class="mb-0" style="cursor: pointer;">
-                        <img src="../assets/icons/upload-icon.png" alt="Import" width="20" height="20">
-                    </label>
                 </div>
             </div>
         </nav>
@@ -105,6 +38,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.4/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="module" src="../js/script.js"></script>
+    <script type="module" src="/js/script.js"></script>
 </body>
 </html>

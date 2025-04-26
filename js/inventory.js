@@ -1,54 +1,22 @@
-// Load saved inventory data
-let inventoryData = [];
-let renderAttempts = 0;
-const MAX_RENDER_ATTEMPTS = 5;
+import * as db from './database/index.js';
 
-// Initialize data when the module loads
+let inventoryData = [];
 let initialized = false;
 
-function initializeInventoryData() {
+async function initializeInventoryData() {
     if (initialized) return;
     
-    return new Promise((resolve) => {
-        const checkDom = () => {
-            const tableBody = document.getElementById('inventoryTableBody');
-            if (tableBody) {
-                try {
-                    const storedData = localStorage.getItem('inventoryData');
-                    inventoryData = storedData ? JSON.parse(storedData) : [];
-                    renderInventoryTable();
-                    initialized = true;
-                    resolve();
-                } catch (error) {
-                    console.error('Error initializing inventory data:', error);
-                    inventoryData = [];
-                    resolve();
-                }
-            } else {
-                requestAnimationFrame(checkDom);
-            }
-        };
-        
-        checkDom();
-    });
-}
-
-function saveInventoryData() {
     try {
-        localStorage.setItem('inventoryData', JSON.stringify(inventoryData));
-        console.log('Inventory data saved successfully');
+        inventoryData = await db.getProducts();
+        renderInventoryTable();
+        initialized = true;
     } catch (error) {
-        console.error('Error saving inventory data:', error);
+        console.error('Error initializing inventory data:', error);
+        inventoryData = [];
     }
 }
 
-function updateInventoryData(newData) {
-    inventoryData = newData;
-    saveInventoryData();
-    renderInventoryTable();
-}
-
-function addProduct(event) {
+async function addProduct(event) {
     if (event) {
         event.preventDefault();
     }
@@ -61,28 +29,20 @@ function addProduct(event) {
         const quantity = parseInt(document.getElementById('productQuantity').value);
 
         if (!name || isNaN(costPrice) || isNaN(price) || isNaN(quantity)) {
-            alert('Please fill in all required fields correctly');
-            return;
+            showNotification('Please fill in all required fields correctly', 'error');
+            return false;
         }
 
-        // Generate a unique ID using timestamp and random number
-        const productId = `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
+        const newProduct = await db.createProduct({
+            name,
+            variant,
+            costPrice,
+            price,
+            quantity
+        });
 
-        // Create new product object
-        const newProduct = {
-            id: productId,
-            name: name,
-            variant: variant,
-            costPrice: costPrice,
-            price: price,
-            quantity: quantity
-        };
-
-        // Add to inventory data
+        // Add to local cache
         inventoryData.push(newProduct);
-        
-        // Save to localStorage
-        saveInventoryData();
         
         // Clear form
         clearProductForm();
@@ -90,10 +50,8 @@ function addProduct(event) {
         // Update table
         renderInventoryTable();
         
-        // Show success message
         showNotification('Product added successfully', 'success');
-        
-        return false; // Prevent form submission
+        return false;
     } catch (error) {
         console.error('Error adding product:', error);
         showNotification('Error adding product', 'error');
@@ -101,6 +59,66 @@ function addProduct(event) {
     }
 }
 
+async function removeItem(id) {
+    if (confirm('Are you sure you want to remove this item?')) {
+        try {
+            await db.deleteProduct(id);
+            inventoryData = inventoryData.filter(item => item.id !== id);
+            renderInventoryTable();
+            showNotification('Product removed successfully', 'success');
+        } catch (error) {
+            console.error('Error removing product:', error);
+            showNotification('Error removing product', 'error');
+        }
+    }
+}
+
+async function saveProduct(id) {
+    try {
+        const name = document.getElementById('productName').value.trim();
+        const variant = document.getElementById('productVariant').value.trim();
+        const costPrice = parseFloat(document.getElementById('productCostPrice').value);
+        const price = parseFloat(document.getElementById('productPrice').value);
+        const quantity = parseInt(document.getElementById('productQuantity').value);
+
+        if (!name || isNaN(costPrice) || isNaN(price) || isNaN(quantity)) {
+            showNotification('Please fill in all required fields correctly', 'error');
+            return;
+        }
+
+        const updatedProduct = await db.updateProduct(id, {
+            name,
+            variant,
+            costPrice,
+            price,
+            quantity
+        });
+
+        if (updatedProduct) {
+            // Update local cache
+            const index = inventoryData.findIndex(item => item.id === id);
+            if (index !== -1) {
+                inventoryData[index] = updatedProduct;
+            }
+        }
+
+        clearProductForm();
+        
+        const addButton = document.querySelector('.add-product-form button');
+        addButton.textContent = 'Add Product';
+        addButton.className = 'btn btn-success w-100';
+        addButton.onclick = addProduct;
+        
+        renderInventoryTable();
+        showNotification('Product updated successfully', 'success');
+        
+    } catch (error) {
+        console.error('Error updating product:', error);
+        showNotification('Error updating product', 'error');
+    }
+}
+
+// Helper functions remain the same
 function clearProductForm() {
     document.getElementById('productName').value = '';
     document.getElementById('productVariant').value = '';
@@ -123,7 +141,6 @@ function renderInventoryTable() {
         return;
     }
     
-    renderAttempts = 0; // Reset counter on successful render
     tableBody.innerHTML = '';
     
     if (inventoryData.length === 0) {
@@ -133,7 +150,7 @@ function renderInventoryTable() {
         return;
     }
 
-    inventoryData.forEach((item, index) => {
+    inventoryData.forEach((item) => {
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="py-3 px-3">${item.id || '-'}</td>
@@ -144,10 +161,10 @@ function renderInventoryTable() {
             <td class="text-center ${item.quantity <= 5 ? 'text-danger' : ''}">${item.quantity}</td>
             <td class="text-end px-3">
                 <div class="btn-group btn-group-sm">
-                    <button class="btn btn-outline-primary" onclick="openEditProductPopup(${index})">
+                    <button class="btn btn-outline-primary" onclick="openEditProductPopup(${inventoryData.indexOf(item)})">
                         <i class="bi bi-pencil"></i> Edit
                     </button>
-                    <button class="btn btn-outline-danger" onclick="removeItem(${index})">
+                    <button class="btn btn-outline-danger" onclick="removeItem('${item.id}')">
                         <i class="bi bi-trash"></i> Remove
                     </button>
                 </div>
@@ -155,15 +172,6 @@ function renderInventoryTable() {
         `;
         tableBody.appendChild(row);
     });
-}
-
-function removeItem(index) {
-    if (confirm('Are you sure you want to remove this item?')) {
-        inventoryData.splice(index, 1);
-        saveInventoryData();
-        renderInventoryTable();
-        showNotification('Product removed successfully', 'success');
-    }
 }
 
 function searchInventory() {
@@ -183,7 +191,6 @@ function searchInventory() {
         }
     });
 
-    // Show no results message if needed
     const tbody = document.querySelector('#inventoryTable tbody');
     const noResultsRow = tbody.querySelector('.no-results');
     if (foundItems === 0) {
@@ -210,87 +217,13 @@ function openEditProductPopup(index) {
     const addButton = document.querySelector('.add-product-form button');
     addButton.textContent = 'Save Changes';
     addButton.className = 'btn btn-primary w-100';
-    addButton.onclick = () => saveProduct(index);
+    addButton.onclick = () => saveProduct(product.id);
 
-    // Scroll form into view
     document.querySelector('.add-product-form').scrollIntoView({ behavior: 'smooth' });
 }
 
-function saveProduct(index) {
-    try {
-        const name = document.getElementById('productName').value.trim();
-        const variant = document.getElementById('productVariant').value.trim();
-        const costPrice = parseFloat(document.getElementById('productCostPrice').value);
-        const price = parseFloat(document.getElementById('productPrice').value);
-        const quantity = parseInt(document.getElementById('productQuantity').value);
-
-        if (!name || isNaN(costPrice) || isNaN(price) || isNaN(quantity)) {
-            alert('Please fill in all required fields correctly');
-            return;
-        }
-
-        // Preserve existing ID or generate new one
-        const existingProduct = inventoryData[index];
-        const productId = existingProduct?.id || `PRD${Date.now()}${Math.floor(Math.random() * 1000)}`;
-
-        inventoryData[index] = {
-            id: productId,
-            name: name,
-            variant: variant,
-            costPrice: costPrice,
-            price: price,
-            quantity: quantity
-        };
-
-        saveInventoryData();
-        clearProductForm();
-        
-        const addButton = document.querySelector('.add-product-form button');
-        addButton.textContent = 'Add Product';
-        addButton.className = 'btn btn-success w-100';
-        addButton.onclick = addProduct;
-        
-        renderInventoryTable();
-        showNotification('Product updated successfully', 'success');
-        
-    } catch (error) {
-        console.error('Error updating product:', error);
-        showNotification('Error updating product', 'error');
-    }
-}
-
-// Wait for DOM content and inventory section to be ready before initializing
-function tryInitialize() {
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeInventoryData);
-        return;
-    }
-    initializeInventoryData();
-}
-
-// Reset initialization flag when the module is reloaded
-document.addEventListener('DOMContentLoaded', tryInitialize);
-
-// Also initialize when the inventory section becomes active
-const observer = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-        if (mutation.target.classList.contains('active') && mutation.target.id === 'inventory' && !initialized) {
-            renderAttempts = 0;
-            tryInitialize();
-        }
-    });
-});
-
-// Start observing the inventory section for visibility changes
-document.addEventListener('DOMContentLoaded', () => {
-    const inventorySection = document.getElementById('inventory');
-    if (inventorySection) {
-        observer.observe(inventorySection, { 
-            attributes: true,
-            attributeFilter: ['class']
-        });
-    }
-});
+// Event listeners
+document.addEventListener('DOMContentLoaded', initializeInventoryData);
 
 // Make functions available globally
 window.addProduct = addProduct;
@@ -302,8 +235,6 @@ window.openEditProductPopup = openEditProductPopup;
 export { 
     inventoryData,
     renderInventoryTable,
-    saveInventoryData,
-    updateInventoryData,
     addProduct,
     removeItem,
     searchInventory,
