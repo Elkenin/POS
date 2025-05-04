@@ -1,20 +1,33 @@
-import { Op } from '/node_modules/sequelize/lib/sequelize.js';
-import { initializeDatabase } from './config.js';
+import { Sequelize } from 'sequelize';
+import sequelize, { initializeDatabase } from './config.js';
 import Product from './models/Product.js';
 import Sale from './models/Sale.js';
 import SaleItem from './models/SaleItem.js';
 
 // Initialize models relationships
-Product.hasMany(SaleItem);
-SaleItem.belongsTo(Product);
+Product.hasMany(SaleItem, {
+    foreignKey: 'productId',
+    onDelete: 'RESTRICT'
+});
+SaleItem.belongsTo(Product, {
+    foreignKey: 'productId'
+});
 
-Sale.hasMany(SaleItem);
-SaleItem.belongsTo(Sale);
+Sale.hasMany(SaleItem, {
+    foreignKey: 'saleId',
+    onDelete: 'CASCADE'
+});
+SaleItem.belongsTo(Sale, {
+    foreignKey: 'saleId'
+});
 
 // Initialize database and models
 export async function initialize() {
     return await initializeDatabase();
 }
+
+// Export models
+export { Product, Sale, SaleItem };
 
 // Product operations
 export async function getProducts() {
@@ -157,6 +170,3 @@ export async function getMonthlyStats(year, month) {
                 itemSum + (item.price - item.Product.costPrice) * item.quantity, 0), 0)
     };
 }
-
-// Export models and operations
-export { Product, Sale, SaleItem };

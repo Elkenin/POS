@@ -1,47 +1,47 @@
-import { DataTypes } from '/node_modules/sequelize/lib/sequelize.js';
+import pkg from 'sequelize';
+const { DataTypes } = pkg;
 import sequelize from '../config.js';
 
 const SaleItem = sequelize.define('SaleItem', {
     id: {
-        type: DataTypes.INTEGER,
-        primaryKey: true,
-        autoIncrement: true
+        type: DataTypes.UUID,
+        defaultValue: DataTypes.UUIDV4,
+        primaryKey: true
     },
     saleId: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'Sales',
-            key: 'id'
-        }
+        type: DataTypes.UUID,
+        allowNull: false
     },
     productId: {
-        type: DataTypes.INTEGER,
-        allowNull: false,
-        references: {
-            model: 'Products',
-            key: 'id'
-        }
+        type: DataTypes.UUID,
+        allowNull: false
     },
     quantity: {
         type: DataTypes.INTEGER,
         allowNull: false,
-        defaultValue: 1
+        defaultValue: 1,
+        validate: {
+            min: 1
+        }
     },
     price: {
         type: DataTypes.DECIMAL(10, 2),
         allowNull: false,
-        comment: 'Price at time of sale'
+        validate: {
+            min: 0
+        }
+    },
+    total: {
+        type: DataTypes.VIRTUAL,
+        get() {
+            return parseFloat(this.price * this.quantity).toFixed(2);
+        }
     }
 }, {
     timestamps: true,
     indexes: [
-        {
-            fields: ['saleId']
-        },
-        {
-            fields: ['productId']
-        }
+        { fields: ['saleId'] },
+        { fields: ['productId'] }
     ]
 });
 

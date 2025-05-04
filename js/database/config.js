@@ -1,44 +1,32 @@
-import { Sequelize } from '/node_modules/sequelize/lib/sequelize.js';
-import dotenv from '/node_modules/dotenv/lib/main.js';
-import mysql from '/node_modules/mysql2/promise.js';
+import Sequelize from 'sequelize';
+import mysql from 'mysql2/promise';
+import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env file
+// Load environment variables
 dotenv.config({ path: path.join(__dirname, '../../.env') });
 
-async function createDatabaseIfNotExists() {
-    try {
-        // Create a temporary connection without specifying a database
-        const connection = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD,
-            port: parseInt(process.env.DB_PORT) || 3306
-        });
-
-        // Create database if it doesn't exist
-        await connection.query(`CREATE DATABASE IF NOT EXISTS ${process.env.DB_NAME || 'pos_system'}`);
-        console.log('Database created or already exists');
-        await connection.end();
-        return true;
-    } catch (error) {
-        console.error('Error creating database:', error);
-        return false;
-    }
-}
+// Database configuration
+const dbConfig = {
+    host: process.env.DB_HOST || 'localhost',
+    user: process.env.DB_USER || 'root',
+    password: process.env.DB_PASSWORD || '',
+    database: process.env.DB_NAME || 'pos_system',
+    port: parseInt(process.env.DB_PORT) || 3306
+};
 
 // Create Sequelize instance
 const sequelize = new Sequelize(
-    process.env.DB_NAME || 'pos_system',
-    process.env.DB_USER || 'root',
-    process.env.DB_PASSWORD,
+    dbConfig.database,
+    dbConfig.user,
+    dbConfig.password,
     {
-        host: process.env.DB_HOST || 'localhost',
-        port: parseInt(process.env.DB_PORT) || 3306,
+        host: dbConfig.host,
+        port: dbConfig.port,
         dialect: 'mysql',
         logging: false,
         timezone: '+00:00',
@@ -51,51 +39,55 @@ const sequelize = new Sequelize(
     }
 );
 
-export async function testConnection() {
-    try {
-        // Test MySQL server connection first
-        const connection = await mysql.createConnection({
-            host: process.env.DB_HOST || 'localhost',
-            user: process.env.DB_USER || 'root',
-            password: process.env.DB_PASSWORD,
-            port: parseInt(process.env.DB_PORT) || 3306
-        });
-        await connection.end();
-        
-        // If server is running, try to connect to the database
-        await sequelize.authenticate();
-        return { serverRunning: true, databaseConnected: true };
-    } catch (error) {
-        if (error.code === 'ER_BAD_DB_ERROR') {
-            return { serverRunning: true, databaseConnected: false };
-        }
-        return { serverRunning: false, databaseConnected: false };
-    }
-}
-
+// Initialize database
 export async function initializeDatabase() {
     try {
-        const status = await testConnection();
+        // Test connection
+        await testConnection();
         
-        if (!status.serverRunning) {
-            throw new Error('MySQL server is not running');
-        }
-
-        if (!status.databaseConnected) {
-            console.log('Database not found, creating...');
-            const created = await createDatabaseIfNotExists();
-            if (!created) {
-                throw new Error('Failed to create database');
-            }
-        }
-
-        // Sync all models
-        await sequelize.sync({ alter: true });
-        console.log('Database synchronized successfully');
+        // Create database if it doesn't exist
+        await createDatabaseIfNotExists();
+        
+        // Sync models
+        await sequelize.sync();
+        
         return true;
     } catch (error) {
         console.error('Database initialization error:', error);
         return false;
+    }
+}
+
+// Create database if it doesn't exist
+async function createDatabaseIfNotExists() {
+    const tempConnection = await mysql.createConnection({
+        host: dbConfig.host,
+        user: dbConfig.user,
+        password: dbConfig.password,
+        port: dbConfig.port
+    });
+
+    try {
+        await tempConnection.query(
+            `CREATE DATABASE IF NOT EXISTS ${dbConfig.database}`
+        );
+        console.log('Database created or already exists');
+        return true;
+    } catch (error) {
+        console.error('Error creating database:', error);
+        return false;
+    } finally {
+        await tempConnection.end();
+    }
+}
+
+// Test database connection
+export async function testConnection() {
+    try {
+        await sequelize.authenticate();
+        return { connected: true, error: null };
+    } catch (error) {
+        return { connected: false, error: error.message };
     }
 }
 

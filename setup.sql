@@ -1,0 +1,42 @@
+CREATE DATABASE IF NOT EXISTS pos_system;
+
+USE pos_system;
+
+CREATE TABLE IF NOT EXISTS Products (
+    id VARCHAR(36) PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    variant VARCHAR(255),
+    costPrice DECIMAL(10,2) NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    quantity INT NOT NULL DEFAULT 0,
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS Sales (
+    id VARCHAR(36) PRIMARY KEY,
+    date TIMESTAMP NOT NULL,
+    total DECIMAL(10,2) NOT NULL,
+    refunded BOOLEAN DEFAULT FALSE,
+    refundDate TIMESTAMP NULL,
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS SaleItems (
+    id VARCHAR(36) PRIMARY KEY,
+    saleId VARCHAR(36) NOT NULL,
+    productId VARCHAR(36) NOT NULL,
+    quantity INT NOT NULL,
+    price DECIMAL(10,2) NOT NULL,
+    createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (saleId) REFERENCES Sales(id),
+    FOREIGN KEY (productId) REFERENCES Products(id)
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_product_name ON Products(name);
+CREATE INDEX idx_sale_date ON Sales(date);
+CREATE INDEX idx_sale_items_sale ON SaleItems(saleId);
+CREATE INDEX idx_sale_items_product ON SaleItems(productId);

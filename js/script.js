@@ -7,6 +7,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     try {
         console.log('Application starting...');
         await bootstrap();
+        // Automatically load home dashboard
+        await showSection('home');
     } catch (error) {
         console.error('Critical initialization error:', error);
         showErrorState(error);
@@ -14,14 +16,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 async function bootstrap() {
-    // First, ensure DOM is ready
-    if (document.readyState !== 'complete') {
-        await new Promise(resolve => window.addEventListener('load', resolve));
-    }
-
-    // Initialize notification system first
-    setupNotificationSystem();
-
     try {
         // Initialize database connection
         const dbInitialized = await db.initialize();
@@ -30,203 +24,103 @@ async function bootstrap() {
         }
         console.log('Database initialized successfully');
 
-        // Load application
-        await initializeApplication();
+        // Initialize navigation handlers
+        initializeNavigation();
+        
+        return true;
     } catch (error) {
         throw new Error(`Bootstrap failed: ${error.message}`);
     }
 }
 
-function setupNotificationSystem() {
-    window.addEventListener('show-notification', (event) => {
-        showNotification(event.detail.message, event.detail.type);
-    });
-    showNotification('Application is starting...', 'info');
-}
-
-async function initializeApplication() {
-    try {
-        console.log('Initializing application...');
-        
-        // Initialize both inventory and sales data
-        await Promise.all([
-            Inventory.initializeInventoryData(),
-            Sales.initializeSalesData()
-        ]);
-        
-        // Show main dashboard
-        showMainDashboard();
-        
-        // Load initial home section
-        const dashboardContent = document.getElementById('dashboard-content');
-        if (dashboardContent) {
-            await showSection('home');
-            
-            // Force refresh all views
-            Home.renderCalendar();
-            Home.initializeCalendarKeyboardNavigation();
-            await Inventory.renderInventoryTable();
-            await Sales.renderSalesInventory();
-            
-            console.log('All views initialized successfully');
-            showNotification('Application initialized successfully', 'success');
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Application initialization error:', error);
-        showNotification('Failed to initialize application: ' + error.message, 'error');
-        throw error;
-    }
-}
-
-function showMainDashboard() {
-    // Initialize navigation
+function initializeNavigation() {
     document.querySelectorAll('[data-section]').forEach(link => {
         link.addEventListener('click', async (e) => {
             e.preventDefault();
             const section = e.currentTarget.dataset.section;
-            await showSection(section);
-            updateActiveNavLink(section);
             
-            if (section === 'home') {
-                Sales.initializeSalesData();
-                await loadHomeSection();
-            }
+            // Update active state
+            document.querySelectorAll('.nav-link').forEach(navLink => {
+                navLink.classList.remove('active');
+            });
+            e.currentTarget.classList.add('active');
+            
+            // Load section content
+            await showSection(section);
         });
     });
-
-    // Load initial home section
-    showSection('home');
 }
 
 async function showSection(sectionId) {
-    // Wait for DOM to be fully ready
-    if (document.readyState !== 'complete') {
-        await new Promise(resolve => {
-            window.addEventListener('load', resolve);
-        });
-    }
-
     const dashboardContent = document.getElementById('dashboard-content');
     if (!dashboardContent) return;
     
     try {
-        // Deactivate all sections first
-        document.querySelectorAll('.dashboard-section').forEach(section => {
-            section.classList.remove('active');
-        });
-
-        // Check if section already exists
-        let sectionElement = document.getElementById(sectionId);
-        if (!sectionElement) {
-            // Load new section only if it doesn't exist
-            const fileName = sectionId === 'sale' ? 'sales' : sectionId;
-            const templateContent = await fetchTemplate(`/pages/${fileName}-dashboard.html`);
-            
-            if (templateContent) {
-                // Create a temporary container to parse the HTML
-                const tempContainer = document.createElement('div');
-                tempContainer.innerHTML = templateContent;
-                
-                // Get the actual section element
-                sectionElement = tempContainer.querySelector(`#${sectionId}`);
-                if (sectionElement) {
-                    dashboardContent.appendChild(sectionElement);
-                } else {
-                    throw new Error(`Section element #${sectionId} not found in template`);
-                }
-            } else {
-                throw new Error(`Failed to load template for section ${sectionId}`);
-            }
+        // Show loading state
+        dashboardContent.innerHTML = `
+            <div class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                <div class="spinner-border" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+        `;
+        
+        // Load content
+        const contentPath = `/pages/${sectionId === 'sale' ? 'sales' : sectionId}-dashboard.html`;
+        const response = await fetch(contentPath);
+        if (!response.ok) {
+            throw new Error(`Failed to load content: ${response.status} ${response.statusText}`);
         }
         
-        // Activate the section
-        if (sectionElement) {
-            sectionElement.classList.add('active');
-            
-            // Initialize section-specific functionality
-            if (sectionId === 'sale' || sectionId === 'inventory') {
-                await Inventory.initializeInventoryData();
-            }
-            
-            switch(sectionId) {
-                case 'home':
-                    await Home.renderCalendar();
-                    Home.initializeCalendarKeyboardNavigation();
-                    break;
-                case 'inventory':
-                    await Inventory.renderInventoryTable();
-                    break;
-                case 'sale':
-                    await Sales.renderSalesInventory();
-                    Sales.initializeTableKeyboardNav();
-                    break;
-            }
-        }
-
-        // Update active navigation link
-        updateActiveNavLink(sectionId);
+        const content = await response.text();
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = content;
+        
+        // Extract only the main content
+        let mainContent = tempDiv.querySelector('main')?.innerHTML || 
+                         tempDiv.querySelector('.container-fluid')?.innerHTML || 
+                         content;
+        
+        // Update the dashboard content
+        dashboardContent.innerHTML = mainContent;
+        
+        // Initialize section-specific functionality
+        await initializeSection(sectionId);
         
     } catch (error) {
         console.error('Error loading section:', error);
-        showNotification('Error loading section: ' + error.message, 'error');
+        dashboardContent.innerHTML = `
+            <div class="alert alert-danger m-3" role="alert">
+                Error loading content: ${error.message}
+            </div>
+        `;
     }
 }
 
-async function loadHomeSection() {
-    // Clear any existing content
-    const homeSection = document.getElementById('home');
-    if (homeSection) {
-        const templateContent = await fetchTemplate('/pages/home-dashboard.html');
-        if (templateContent) {
-            // Create a temporary container to parse the HTML
-            const tempContainer = document.createElement('div');
-            tempContainer.innerHTML = templateContent;
-            
-            // Get the actual section element content
-            const sectionContent = tempContainer.querySelector('#home');
-            if (sectionContent) {
-                homeSection.innerHTML = sectionContent.innerHTML;
-                
-                // Initialize calendar and stats after content is loaded
-                Home.renderCalendar();
-                Home.initializeCalendarKeyboardNavigation();
-            }
-        }
-    }
-}
-
-// Helper function to fetch HTML templates
-async function fetchTemplate(path) {
+async function initializeSection(sectionId) {
     try {
-        console.log('Fetching template:', path);
-        const absolutePath = path.replace(/^\.\.\//, '/');
-        console.log('Using absolute path:', absolutePath);
-        const response = await fetch(absolutePath);
-        if (!response.ok) {
-            throw new Error(`Failed to load template: ${response.status} ${response.statusText}`);
+        switch(sectionId) {
+            case 'home':
+                await Home.renderCalendar();
+                Home.initializeCalendarKeyboardNavigation();
+                break;
+            case 'inventory':
+                await Inventory.initializeInventoryData();
+                await Inventory.renderInventoryTable();
+                break;
+            case 'sale':
+                await Sales.initializeSalesData();
+                await Sales.renderSalesInventory();
+                Sales.initializeTableKeyboardNav();
+                break;
         }
-        const text = await response.text();
-        console.log('Template loaded successfully:', absolutePath);
-        return text;
     } catch (error) {
-        console.error('Error loading template:', path, error);
-        showNotification(`Failed to load template: ${path}`, 'error');
-        return '';
+        console.error(`Error initializing section ${sectionId}:`, error);
+        throw error;
     }
 }
 
-function updateActiveNavLink(sectionId) {
-    document.querySelectorAll('.nav-link').forEach(link => {
-        link.classList.remove('active');
-        if (link.dataset.section === sectionId) {
-            link.classList.add('active');
-        }
-    });
-}
-
-// Updated notification system with Bootstrap's toast component
+// Notification system with Bootstrap's toast component
 function showNotification(message, type = 'info', duration = 3000) {
     console.log(`Showing notification: ${message} (${type})`);
     
@@ -260,41 +154,19 @@ function showNotification(message, type = 'info', duration = 3000) {
     
     toastContainer.appendChild(toastElement);
     
-    // Initialize toast with Bootstrap if available, otherwise use fallback
-    if (typeof bootstrap !== 'undefined' && bootstrap.Toast) {
-        const toast = new bootstrap.Toast(toastElement, {
-            delay: duration,
-            animation: true,
-            autohide: true
-        });
-        toast.show();
-    } else {
-        // Fallback if Bootstrap JS isn't loaded
-        toastElement.style.opacity = '1';
-        toastElement.style.display = 'block';
-        setTimeout(() => {
-            toastElement.style.opacity = '0';
-            toastElement.style.transition = 'opacity 0.15s linear';
-            setTimeout(() => toastElement.remove(), 150);
-        }, duration);
-    }
+    // Initialize toast
+    const toast = new bootstrap.Toast(toastElement, {
+        delay: duration,
+        animation: true,
+        autohide: true
+    });
+    toast.show();
 
     // Remove from DOM after hidden
     toastElement.addEventListener('hidden.bs.toast', () => {
         toastElement.remove();
     });
-    
-    // Also log to console for debugging
-    console.log(`Notification shown: ${message}`);
 }
 
 // Make necessary functions available to HTML
-window.addProduct = Inventory.addProduct;
-window.removeItem = Inventory.removeItem;
-window.searchInventory = Inventory.searchInventory;
-window.openEditProductPopup = Inventory.openEditProductPopup;
-window.addToCart = Sales.addToCart;
-window.removeFromCart = Sales.removeFromCart;
-window.finalizeSale = Sales.finalizeSale;
-window.printReceipt = Sales.printReceipt;
-window.navigateCalendar = Home.navigateCalendar;
+window.showSection = showSection;
