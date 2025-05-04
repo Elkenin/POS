@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import { initializeDatabase } from './js/database/config.js';
 import * as db from './js/database/index.js';
 
 // ES Module fix for __dirname
@@ -74,8 +75,7 @@ app.delete('/api/products/:id', async (req, res) => {
 // Sales Routes
 app.get('/api/sales', async (req, res) => {
     try {
-        const { startDate, endDate } = req.query;
-        const sales = await db.getSales(startDate, endDate);
+        const sales = await db.getSales();
         res.json(sales);
     } catch (error) {
         res.status(500).json({ error: error.message });
@@ -99,7 +99,11 @@ app.get('/', (req, res) => {
 // Start server
 async function startServer() {
     try {
-        await db.initialize();
+        // Initialize database
+        const dbInitialized = await initializeDatabase();
+        if (!dbInitialized) {
+            throw new Error('Failed to initialize database');
+        }
         console.log('Database initialized successfully');
         
         app.listen(PORT, () => {

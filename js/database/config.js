@@ -1,4 +1,5 @@
-import Sequelize from 'sequelize';
+// Import sequelize from node_modules with proper path
+import { Sequelize } from 'sequelize';
 import mysql from 'mysql2/promise';
 import dotenv from 'dotenv';
 import path from 'path';

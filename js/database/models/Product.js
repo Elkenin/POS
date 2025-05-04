@@ -1,5 +1,4 @@
-import pkg from 'sequelize';
-const { DataTypes } = pkg;
+import { DataTypes } from 'sequelize';
 import sequelize from '../config.js';
 
 const Product = sequelize.define('Product', {
